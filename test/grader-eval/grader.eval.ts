@@ -44,8 +44,19 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+// The key from the environment, else from .dev.vars (gitignored), where local development keeps it.
+function apiKey(): string {
+  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
+  try {
+    const vars = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../.dev.vars"), "utf8");
+    return /^ANTHROPIC_API_KEY=(.+)$/m.exec(vars)?.[1].trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
 it.each(["en", "fr"] as const)("grader agrees with the %s labels", async (lang) => {
-  const env = { GRADER_MODE: "claude", ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "" } as Env;
+  const env = { GRADER_MODE: "claude", ANTHROPIC_API_KEY: apiKey() } as Env;
   const cases = load(lang);
   const graded = await mapLimit(cases, 5, async (c) => ({ c, g: await grade(env, { ...c, wordLang: c.lang }) }));
 

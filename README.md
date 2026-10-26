@@ -59,7 +59,7 @@ these holds:
 - no API key is set
 
 `npm run eval:grader` runs the hand-labelled answers in `test/grader-eval/` against the real model and
-prints the agreement.
+prints the agreement. It takes the key from `ANTHROPIC_API_KEY`, or else from `.dev.vars`.
 
 ## Test
 
