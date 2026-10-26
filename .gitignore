@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.wrangler/
+.dev.vars
+.claude/launch.json
+backups/
+test-results/
+playwright-report/
+pipeline/data/
+pipeline/.venv/
+__pycache__/

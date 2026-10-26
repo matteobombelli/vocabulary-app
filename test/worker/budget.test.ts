@@ -1,0 +1,82 @@
+import { env } from "cloudflare:workers";
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Card, Status } from "../../shared/api";
+import { monthKey } from "../../worker/services/budget";
+import { cookieHeader, jsonRequest, registerAndLogin, request, rightAnswer, seedWords } from "./helpers";
+
+let seq = 0;
+const email = () => `budget${++seq}@example.com`;
+
+beforeAll(async () => {
+  await seedWords("en", 100);
+});
+
+async function status(cookie: string): Promise<Status> {
+  const res = await request("/status", { headers: cookieHeader(cookie) });
+  return ((await res.json()) as { status: Status }).status;
+}
+
+async function setMonthlyCost(microUsd: number) {
+  await env.DB.prepare(
+    "INSERT INTO api_usage (month, cost_micro_usd) VALUES (?, ?) ON CONFLICT (month) DO UPDATE SET cost_micro_usd = excluded.cost_micro_usd",
+  )
+    .bind(monthKey(Date.now()), microUsd)
+    .run();
+}
+
+describe("budget guard", () => {
+  it("allows grading under the budget", async () => {
+    await setMonthlyCost(0);
+    const { cookie } = await registerAndLogin(email());
+    expect(await status(cookie)).toEqual({ choiceOnly: false, reason: null, gradedToday: 0, dailyCap: 200 });
+  });
+
+  it("switches to multiple choice near the monthly budget", async () => {
+    // MONTHLY_BUDGET_USD is 5; 90% of it is 4.5 USD.
+    await setMonthlyCost(4.6e6);
+    const { cookie } = await registerAndLogin(email());
+    await request("/courses/en/start-from-beginning", { method: "POST", headers: cookieHeader(cookie) });
+    expect(await status(cookie)).toMatchObject({ choiceOnly: true, reason: "budget" });
+
+    const res = await request("/courses/en/learn", { headers: cookieHeader(cookie) });
+    const { cards } = (await res.json()) as { cards: Card[] };
+    expect(cards.every((c) => c.kind === "choice" && c.options?.length === 4)).toBe(true);
+
+    const typed = await jsonRequest("/courses/en/answer", "POST", { wordId: cards[0].wordId, mode: "learn", kind: "typed", answer: "x" }, cookie);
+    expect(typed.status).toBe(409);
+    expect(await typed.json()).toEqual({ error: "Typed answers are paused", details: { reason: "budget" } });
+
+    const choice = await jsonRequest(
+      "/courses/en/answer",
+      "POST",
+      { wordId: cards[0].wordId, mode: "learn", kind: "choice", answer: rightAnswer(cards[0].lemma) },
+      cookie,
+    );
+    expect(choice.status).toBe(200);
+    expect(((await choice.json()) as { result: { verdict: string } }).result.verdict).toBe("correct");
+    await setMonthlyCost(0);
+  });
+
+  it("stops grading a user after the daily cap", async () => {
+    await setMonthlyCost(0);
+    const { cookie, user } = await registerAndLogin(email());
+    const t = Date.now();
+    const rows = Array.from({ length: 200 }, () =>
+      env.DB.prepare("INSERT INTO attempts (user_id, word_id, mode, kind, verdict, graded, created_at) VALUES (?, 1, 'learn', 'typed', 'correct', 1, ?)").bind(user.id, t),
+    );
+    await env.DB.batch(rows);
+    expect(await status(cookie)).toMatchObject({ choiceOnly: true, reason: "daily_cap", gradedToday: 200 });
+  });
+
+  it("records token usage for graded answers", async () => {
+    await setMonthlyCost(0);
+    const { cookie } = await registerAndLogin(email());
+    await request("/courses/en/start-from-beginning", { method: "POST", headers: cookieHeader(cookie) });
+    const before = await env.DB.prepare("SELECT calls FROM api_usage WHERE month = ?").bind(monthKey(Date.now())).first<{ calls: number }>();
+    const res = await request("/courses/en/learn", { headers: cookieHeader(cookie) });
+    const { cards } = (await res.json()) as { cards: Card[] };
+    await jsonRequest("/courses/en/answer", "POST", { wordId: cards[0].wordId, mode: "learn", kind: "typed", answer: "anything" }, cookie);
+    const after = await env.DB.prepare("SELECT calls FROM api_usage WHERE month = ?").bind(monthKey(Date.now())).first<{ calls: number }>();
+    expect(after!.calls).toBe((before?.calls ?? 0) + 1);
+  });
+});

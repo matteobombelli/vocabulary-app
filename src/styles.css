@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* Colour tokens: one neutral ramp and one accent, swapped wholesale for dark mode. */
+:root {
+  color-scheme: light dark;
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --fg: #1c1b19;
+  --muted: #6b6862;
+  --line: #e4e1da;
+  --accent: #0f766e;
+  --accent-soft: #e6f3f1;
+  --good: #15803d;
+  --good-soft: #e8f5ec;
+  --warn: #b45309;
+  --warn-soft: #fdf3e4;
+  --bad: #b91c1c;
+  --bad-soft: #fbeaea;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151513;
+    --surface: #1e1d1b;
+    --fg: #ecebe7;
+    --muted: #9c9890;
+    --line: #34322e;
+    --accent: #2dd4bf;
+    --accent-soft: #15302d;
+    --good: #4ade80;
+    --good-soft: #15291c;
+    --warn: #fbbf24;
+    --warn-soft: #2e2512;
+    --bad: #f87171;
+    --bad-soft: #2f1817;
+  }
+}
+
+@theme inline {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+  }
+  input,
+  textarea {
+    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-fg outline-none placeholder:text-muted focus:border-accent;
+  }
+  a {
+    @apply text-accent;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 font-medium text-fg no-underline transition-colors hover:border-accent disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-surface hover:opacity-90;
+  }
+  .card {
+    @apply rounded-xl border border-line bg-surface p-5;
+  }
+}

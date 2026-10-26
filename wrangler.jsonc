@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vocabulary-app",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-20",
+  // The Anthropic SDK needs node:* built-ins.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  // apps.matteob.dev is a Cloudflare Tunnel to the home server; this route takes only this prefix.
+  "routes": [
+    { "pattern": "apps.matteob.dev/projects/vocabulary-app*", "zone_name": "matteob.dev" }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/projects/vocabulary-app/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vocabulary-app",
+      "database_id": "8206fd20-e698-4371-bb73-cfb367e25ac9",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Secrets (wrangler secret put): REGISTRATION_SECRET, ANTHROPIC_API_KEY.
+  // GRADER_MODE "stub" swaps the Claude grader for a local heuristic (tests, e2e).
+  "vars": {
+    "MONTHLY_BUDGET_USD": "5",
+    "DAILY_GRADED_CAP": "200",
+    "GRADER_MODE": "claude"
+  },
+  "observability": { "enabled": true }
+}
