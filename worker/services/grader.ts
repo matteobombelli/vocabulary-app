@@ -4,10 +4,13 @@ import { z } from "zod";
 import type { AnswerLang, Lang, Verdict } from "../../shared/api";
 import { HttpError } from "../router";
 
-export const GRADER_MODEL = "claude-haiku-5-5";
-// Claude Haiku 5.5 list prices in micro-USD per token ($0.10 / $0.50 per million).
-const INPUT_MICRO_USD = 0.1;
-const OUTPUT_MICRO_USD = 0.5;
+// Haiku grades every answer; a "partial" verdict, where it is least reliable, is graded again
+// by Sonnet, whose verdict stands. Prices are list prices in micro-USD per token.
+const MODELS = {
+  first: { id: "claude-haiku-5-5", effort: "low", inputMicroUsd: 0.1, outputMicroUsd: 0.5 },
+  escalation: { id: "claude-sonnet-5-5", effort: "medium", inputMicroUsd: 2, outputMicroUsd: 10 },
+} as const;
+type Model = (typeof MODELS)[keyof typeof MODELS];
 
 export interface GradeInput {
   lemma: string;
@@ -26,6 +29,8 @@ export interface Grade {
   feedback: string;
   inputTokens: number;
   outputTokens: number;
+  costMicroUsd: number;
+  escalated: boolean;
 }
 
 const LANGUAGE_NAMES: Record<Lang, string> = { en: "English", fr: "French" };
@@ -71,38 +76,62 @@ export function userPrompt(input: GradeInput): string {
   ].join("\n");
 }
 
-export function costMicroUsd(inputTokens: number, outputTokens: number): number {
-  return inputTokens * INPUT_MICRO_USD + outputTokens * OUTPUT_MICRO_USD;
+async function ask(client: Anthropic, model: Model, input: GradeInput): Promise<Grade> {
+  const response = await client.messages.parse({
+    model: model.id,
+    max_tokens: 1024,
+    output_config: { effort: model.effort, format: zodOutputFormat(GradeSchema) },
+    // The system prompt is the same for every answer, user and language, so it is cached.
+    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: userPrompt(input) }],
+  });
+  const parsed = response.parsed_output;
+  if (response.stop_reason === "refusal" || !parsed) throw new Error(`no verdict from ${model.id}: ${response.stop_reason}`);
+  const usage = response.usage;
+  const cacheWrite = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  const inputTokens = usage.input_tokens + cacheWrite + cacheRead;
+  const outputTokens = usage.output_tokens;
+  return {
+    verdict: parsed.verdict,
+    feedback: parsed.feedback,
+    inputTokens,
+    outputTokens,
+    // Cache writes (5-minute TTL) cost 1.25x input, cache reads 0.1x.
+    costMicroUsd:
+      (usage.input_tokens + cacheWrite * 1.25 + cacheRead * 0.1) * model.inputMicroUsd + outputTokens * model.outputMicroUsd,
+    escalated: false,
+  };
 }
 
-export async function grade(env: Env, input: GradeInput): Promise<Grade> {
+/** Grades a typed answer. escalate: false skips the Sonnet second opinion (the budget brake). */
+export async function grade(env: Env, input: GradeInput, escalate = true): Promise<Grade> {
   if (env.GRADER_MODE === "stub") return stubGrade(input);
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  let response;
+  let first: Grade;
   try {
-    response = await client.messages.parse({
-      model: GRADER_MODEL,
-      max_tokens: 1024,
-      output_config: { effort: "medium", format: zodOutputFormat(GradeSchema) },
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt(input) }],
-    });
+    first = await ask(client, MODELS.first, input);
   } catch (err) {
     console.error("grader request failed", err);
     throw new HttpError(502, "Grading is unavailable right now");
   }
-  const parsed = response.parsed_output;
-  if (response.stop_reason === "refusal" || !parsed) {
-    console.error("grader returned no verdict", response.stop_reason);
-    throw new HttpError(502, "Grading is unavailable right now");
+  if (first.verdict !== "partial" || !escalate) return first;
+
+  try {
+    const second = await ask(client, MODELS.escalation, input);
+    return {
+      ...second,
+      inputTokens: first.inputTokens + second.inputTokens,
+      outputTokens: first.outputTokens + second.outputTokens,
+      costMicroUsd: first.costMicroUsd + second.costMicroUsd,
+      escalated: true,
+    };
+  } catch (err) {
+    // The first verdict is still a usable answer.
+    console.error("grader escalation failed", err);
+    return first;
   }
-  return {
-    verdict: parsed.verdict,
-    feedback: parsed.feedback,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-  };
 }
 
 /**
@@ -118,5 +147,7 @@ function stubGrade(input: GradeInput): Grade {
     feedback: hit ? "Stub grader: matches the reference." : "Stub grader: no overlap with the reference.",
     inputTokens: 0,
     outputTokens: 0,
+    costMicroUsd: 0,
+    escalated: false,
   };
 }

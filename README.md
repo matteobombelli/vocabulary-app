@@ -49,17 +49,29 @@ npm run db:migrate:local
 
 ## Grading and budget
 
-`worker/services/grader.ts` calls `claude-haiku-5-5` with structured output and gets back a verdict
-(correct / partial / incorrect) plus one line of feedback. Token usage goes into `attempts` and the
-monthly `api_usage` row. Typed answers pause, and every card becomes multiple choice, when any of
-these holds:
+`worker/services/grader.ts` grades every typed answer with `claude-haiku-5-5` (low effort) and gets
+back a structured verdict (correct / partial / incorrect) plus one line of feedback. A "partial"
+verdict, where Haiku is least reliable, is graded again by `claude-sonnet-5-5` (medium effort), and
+Sonnet's verdict stands. The system prompt is the same for every answer, so it is prompt-cached.
 
-- the month's spend reaches 90% of `MONTHLY_BUDGET_USD` (wrangler.jsonc, default $5)
-- the user has had `DAILY_GRADED_CAP` graded answers today (default 200)
-- no API key is set
+The target is 99% accuracy on correct vs. not correct, at more than 10,000 graded answers a month
+for $5. On the 100 hand-labelled answers in `test/grader-eval/`, this setup scores 100% (English) and
+98% (French; the one miss is a debatable label). It costs about $0.00025–0.00033 per answer
+($2.50–3.30 per 10k) with a warm cache, and up to about $0.00047 with a cold one. 100 answers can't
+pin down 99%: confirm it on real attempts.
 
-`npm run eval:grader` runs the hand-labelled answers in `test/grader-eval/` against the real model and
-prints the agreement. It takes the key from `ANTHROPIC_API_KEY`, or else from `.dev.vars`.
+Every attempt records its tokens, `escalated` and `cost_micro_usd`, and `api_usage` keeps the monthly
+total. Two thresholds of `MONTHLY_BUDGET_USD` (wrangler.jsonc, default $5) apply:
+
+- at 70%, "partial" verdicts are no longer re-graded by Sonnet
+- at 90%, typed answers pause and every card becomes multiple choice
+
+Typed answers also pause after `DAILY_GRADED_CAP` graded answers for a user in a day (default 200),
+or when no API key is set.
+
+`npm run eval:grader` runs the labelled answers against the real models (key from
+`ANTHROPIC_API_KEY`, or else `.dev.vars`) and writes the report to `test-results/grader-eval-*.txt`.
+`EVAL_ESCALATE=0` grades with Haiku alone.
 
 ## Test
 

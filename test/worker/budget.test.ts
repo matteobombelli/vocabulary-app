@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Card, Status } from "../../shared/api";
-import { monthKey } from "../../worker/services/budget";
+import { gradingState, monthKey } from "../../worker/services/budget";
 import { cookieHeader, jsonRequest, registerAndLogin, request, rightAnswer, seedWords } from "./helpers";
 
 let seq = 0;
@@ -29,6 +29,16 @@ describe("budget guard", () => {
     await setMonthlyCost(0);
     const { cookie } = await registerAndLogin(email());
     expect(await status(cookie)).toEqual({ choiceOnly: false, reason: null, gradedToday: 0, dailyCap: 200 });
+  });
+
+  it("stops escalating to Sonnet at 70% of the budget, before typed answers stop", async () => {
+    const { user } = await registerAndLogin(email());
+    // MONTHLY_BUDGET_USD is 5: 70% is 3.5 USD, 90% is 4.5 USD.
+    await setMonthlyCost(3.4e6);
+    expect(await gradingState(env, user.id)).toMatchObject({ escalate: true, status: { choiceOnly: false } });
+    await setMonthlyCost(3.6e6);
+    expect(await gradingState(env, user.id)).toMatchObject({ escalate: false, status: { choiceOnly: false } });
+    await setMonthlyCost(0);
   });
 
   it("switches to multiple choice near the monthly budget", async () => {
