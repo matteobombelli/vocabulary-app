@@ -13,6 +13,7 @@ import {
   type AssessmentState,
 } from "../../shared/assessment";
 import { newId } from "../../shared/ids";
+import { startBand, tiersFor, type Level } from "../../shared/levels";
 import { requireUser } from "../auth/session";
 import { WORD_COLUMNS, getCourse, getWord, parseLang, toCard, totalWords, type CourseRow, type WordRow } from "../db";
 import { json, now, parseJson } from "../http";
@@ -28,24 +29,32 @@ interface AssessmentRow {
 }
 
 /**
- * An eligible word from the band the state asks for, not asked before: the first one at or after
- * a random rank in the band (an index seek), wrapping to the band's start.
+ * A word taught at the learner's level from the band the state asks for, not asked before: the
+ * first one at or after a random rank in the band (an index seek per tier), wrapping to the band's
+ * start. Words outside the level's tiers (rare specialist terms, or anything past core words for
+ * a beginner) are never asked.
  */
-async function pickWord(db: D1Database, lang: Lang, state: AssessmentState): Promise<WordRow> {
+async function pickWord(db: D1Database, lang: Lang, level: Level | null, state: AssessmentState): Promise<WordRow> {
   const [lo, hi] = bandRange(nextBand(state), state.maxRank);
+  const tiers = tiersFor(level);
   const seek = db.prepare(
-    `SELECT ${WORD_COLUMNS} FROM words w WHERE w.lang = ? AND w.eligible = 1 AND w.rank >= ? AND w.rank <= ? ORDER BY w.rank LIMIT 8`,
+    `SELECT ${WORD_COLUMNS} FROM words w WHERE w.lang = ? AND w.tier = ? AND w.rank >= ? AND w.rank <= ? ORDER BY w.rank LIMIT 8`,
   );
   for (let attempt = 0; attempt < 4; attempt++) {
     const from = attempt === 3 ? lo : lo + Math.floor(Math.random() * (hi - lo + 1));
-    const { results } = await seek.bind(lang, from, hi).all<WordRow>();
-    const word = results.find((w) => !state.asked.includes(w.id));
+    const batches = await db.batch<WordRow>(tiers.map((tier) => seek.bind(lang, tier, from, hi)));
+    const word = batches
+      .flatMap((b) => b.results)
+      .sort((a, b) => a.rank - b.rank)
+      .find((w) => !state.asked.includes(w.id));
     if (word) return word;
   }
-  // The band is used up: any eligible word not asked yet.
+  // The band is used up: any word of the level's tiers not asked yet.
   const { results } = await db
-    .prepare(`SELECT ${WORD_COLUMNS} FROM words w WHERE w.lang = ? AND w.eligible = 1 ORDER BY w.rank LIMIT ?`)
-    .bind(lang, state.asked.length + 1)
+    .prepare(
+      `SELECT ${WORD_COLUMNS} FROM words w WHERE w.lang = ? AND w.tier IN (${tiers.map(() => "?").join(", ")}) ORDER BY w.rank LIMIT ?`,
+    )
+    .bind(lang, ...tiers, state.asked.length + 1)
     .all<WordRow>();
   const word = results.find((w) => !state.asked.includes(w.id));
   if (!word) throw new HttpError(409, "Not enough words for an assessment");
@@ -53,7 +62,7 @@ async function pickWord(db: D1Database, lang: Lang, state: AssessmentState): Pro
 }
 
 async function nextStep(env: Env, course: CourseRow, id: string, state: AssessmentState): Promise<[AssessmentState, AssessmentStep]> {
-  const word = await pickWord(env.DB, course.lang, state);
+  const word = await pickWord(env.DB, course.lang, course.level, state);
   const { choiceOnly } = await gradingStatus(env, course.user_id);
   const kind = itemKind(state.responses.length, choiceOnly);
   const next = { ...state, asked: [...state.asked, word.id], pending: { wordId: word.id, rank: word.rank, kind } };
@@ -67,7 +76,7 @@ export function registerAssessmentRoutes(r: Router): void {
     const maxRank = await totalWords(c.env.DB, course.lang);
     if (maxRank === 0) throw new HttpError(409, "No words loaded for this language yet");
     const id = newId();
-    const [state, step] = await nextStep(c.env, course, id, initialState(maxRank));
+    const [state, step] = await nextStep(c.env, course, id, initialState(maxRank, startBand(course.level, maxRank)));
     await c.env.DB.prepare("INSERT INTO assessments (id, user_id, lang, state, created_at) VALUES (?, ?, ?, ?, ?)")
       .bind(id, user.id, course.lang, JSON.stringify(state), now())
       .run();
@@ -95,7 +104,7 @@ export function registerAssessmentRoutes(r: Router): void {
     const t = now();
     if (result.verdict === "correct") {
       await c.env.DB.prepare(
-        "INSERT OR IGNORE INTO user_words (user_id, word_id, lang, status, box, due_at, created_at, updated_at) VALUES (?, ?, ?, 'known', NULL, NULL, ?, ?)",
+        "INSERT OR IGNORE INTO user_words (user_id, word_id, lang, status, completions, due_at, created_at, updated_at) VALUES (?, ?, ?, 'known', NULL, NULL, ?, ?)",
       )
         .bind(user.id, word.id, course.lang, t, t)
         .run();
@@ -112,8 +121,8 @@ export function registerAssessmentRoutes(r: Router): void {
           "UPDATE assessments SET state = ?, a = ?, b = ?, est_size = ?, start_rank = ?, finished_at = ? WHERE id = ? AND state = ?",
         ).bind(JSON.stringify(updated), f.a, f.b, estSize, start, t, row.id, row.state),
         c.env.DB.prepare(
-          "UPDATE courses SET start_rank = ?, est_size = ?, assessed_at = ?, cursor_rank = 0 WHERE user_id = ? AND lang = ?",
-        ).bind(start, estSize, t, user.id, course.lang),
+          "UPDATE courses SET start_rank = ?, est_size = ?, assessed_at = ?, cursor_rank = ?, adapt_right = 0, adapt_total = 0 WHERE user_id = ? AND lang = ?",
+        ).bind(start, estSize, t, start - 1, user.id, course.lang),
       ]);
     } else {
       [updated, response.next] = await nextStep(c.env, course, row.id, updated);

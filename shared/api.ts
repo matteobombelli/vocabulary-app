@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { LEVELS, type Game, type Level, type LevelChange } from "./levels";
+import { STAGES, type Stage } from "./lifecycle";
 
 export const API_PREFIX = "/api";
 
@@ -25,10 +27,14 @@ export type LoginBody = z.input<typeof LoginBody>;
 export const CourseSettings = z.object({ defLang: Lang, answerLang: AnswerLang });
 export type CourseSettings = z.input<typeof CourseSettings>;
 
-export const Mode = z.enum(["assessment", "learn", "review"]);
+export const LevelBody = z.object({ level: z.enum(LEVELS) });
+export type LevelBody = z.input<typeof LevelBody>;
+
+export const Mode = z.enum(["assessment", "learn"]);
 export type Mode = z.infer<typeof Mode>;
 
-export const AnswerKind = z.enum(["typed", "choice", "dontknow"]);
+// "match": a synonym or antonym board, judged on the client (correct says how it went).
+export const AnswerKind = z.enum(["typed", "choice", "dontknow", "match"]);
 export type AnswerKind = z.infer<typeof AnswerKind>;
 
 export const Answer = z.object({
@@ -39,10 +45,17 @@ export const Answer = z.object({
 });
 export type Answer = z.input<typeof Answer>;
 
+// What a study answer was: the definition multiple choice of a word's intro, a game, or the typed
+// (or, when grading is paused, multiple-choice) definition of the define stage.
+export const GameKind = z.enum(["mc", "usage", "cloze", "synonym", "antonym", "sentence", "define"]);
+export type GameKind = z.infer<typeof GameKind>;
+
 export const StudyAnswer = Answer.extend({
-  mode: z.enum(["learn", "review"]),
-  // A failed card shown again later in the same session: logged, but scheduling is unchanged.
-  retry: z.boolean().default(false),
+  // The stage the word was served in; an answer for a stale stage is logged but moves nothing.
+  stage: z.enum(STAGES),
+  game: GameKind,
+  // For "match" answers only.
+  correct: z.boolean().optional(),
 });
 export type StudyAnswer = z.input<typeof StudyAnswer>;
 
@@ -57,12 +70,16 @@ export interface Course {
   lang: Lang;
   defLang: Lang;
   answerLang: AnswerLang;
+  level: Level | null;
   startRank: number | null;
   estSize: number | null;
   assessedAt: number | null;
   totalWords: number;
+  // Words in each stage: known (including decayed ones), learning (intro, games or define),
+  // recovered (known after a miss), due (known words decayed back to define).
   known: number;
   learning: number;
+  recovered: number;
   due: number;
 }
 
@@ -116,8 +133,66 @@ export interface WordListItem {
   wordId: number;
   lemma: string;
   rank: number;
-  status: "known" | "learning";
-  box: number | null;
+  // The stage the word would be served in now (a decayed known word is "define").
+  stage: Stage;
+  decayed: boolean;
+  gamesDone: number;
+  gamesNeeded: number;
   dueAt: number | null;
+  failCount: number;
   definition: string;
 }
+
+export type WordListTab = "learning" | "known" | "recovered";
+
+// Game content for a word, in its own language (migrations/0003_lifecycle.sql).
+export interface GameContent {
+  synonyms: string[];
+  antonyms: string[];
+  cloze: { sentence: string; answer: string; bank: string[] } | null;
+  usage: { correct: string; wrong: string[] } | null;
+}
+
+export interface SessionWord {
+  wordId: number;
+  lemma: string;
+  pos: string;
+  rank: number;
+  // The stage it is served in.
+  stage: Stage;
+  // Never answered before.
+  isNew: boolean;
+  // A known word whose meaning decayed: served as define.
+  decayed: boolean;
+  gamesNeeded: number;
+  gamesDone: number;
+  failCount: number;
+  // Definition multiple-choice options, shuffled, in the course's definition language.
+  options: string[];
+  definition: string;
+  glosses: string[];
+  example: string;
+  games: GameContent;
+}
+
+// A word the learner knows, used to fill synonym and antonym boards.
+export interface PairWord {
+  wordId: number;
+  lemma: string;
+  synonyms: string[];
+  antonyms: string[];
+}
+
+export interface StudySession {
+  level: Level | null;
+  words: SessionWord[];
+  known: PairWord[];
+  status: Status;
+}
+
+export interface StudyAnswerResponse {
+  result: AnswerResult;
+  levelChange: LevelChange;
+}
+
+export type { Game, Level, LevelChange, Stage };

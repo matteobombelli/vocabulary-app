@@ -1,10 +1,11 @@
-import { BookOpen, ChevronRight, Gauge, List, Repeat, type LucideIcon } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { BookOpen, ChevronRight, Gauge, List, type LucideIcon } from "lucide-react";
+import { useEffect, type CSSProperties } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
-import type { Course } from "../../shared/api";
+import type { Level } from "../../shared/api";
+import { courseKey, prefetchSession, setCached, useCourse } from "../api/cache";
 import { courses } from "../api/endpoints";
+import { LevelPicker } from "../components/LevelPicker";
 import { NavBar } from "../components/NavBar";
-import { Spinner } from "../components/Spinner";
 import { rememberCourse } from "../lastCourse";
 import { LANGUAGE_NAMES, t } from "../strings";
 import { useLang } from "../useLang";
@@ -12,21 +13,27 @@ import { useLang } from "../useLang";
 export default function CoursePage() {
   const lang = useLang();
   const navigate = useNavigate();
-  const [course, setCourse] = useState<Course | null>(null);
-  const [error, setError] = useState(false);
+  const { data: course, error } = useCourse(lang);
+  const started = course?.startRank != null;
 
   useEffect(() => {
-    if (!lang) return;
-    rememberCourse(lang);
-    setCourse(null);
-    courses.get(lang).then(setCourse, () => setError(true));
+    if (lang) rememberCourse(lang);
   }, [lang]);
+
+  // The study session is likely next: start loading it now so it opens straight away.
+  useEffect(() => {
+    if (lang && started) prefetchSession(lang);
+  }, [lang, started]);
 
   if (!lang) return <Navigate to="/" replace />;
 
   async function startFromBeginning() {
-    await courses.startFromBeginning(lang!);
-    navigate(`/${lang}/learn`);
+    setCached(courseKey(lang!), await courses.startFromBeginning(lang!));
+    navigate(`/${lang}/study`, { viewTransition: true });
+  }
+
+  async function chooseLevel(level: Level) {
+    setCached(courseKey(lang!), await courses.level(lang!, level));
   }
 
   return (
@@ -35,24 +42,30 @@ export default function CoursePage() {
       <h1 className="large-title">{LANGUAGE_NAMES[lang]}</h1>
       {course?.estSize != null && <p className="muted">{t.estimate(course.estSize)}</p>}
 
-      {error ? (
+      {error && !course ? (
         <p className="error">{t.somethingWrong}</p>
       ) : !course ? (
-        <Spinner />
+        <CourseSkeleton />
       ) : course.totalWords === 0 ? (
         <p className="empty">{t.noWordsYet}</p>
+      ) : course.level === null ? (
+        <section className="question__actions">
+          <h2 className="group-label">{t.levelQuestion(LANGUAGE_NAMES[lang])}</h2>
+          <LevelPicker value={null} onChange={(l) => void chooseLevel(l)} />
+          <p className="group-hint">{t.levelHint}</p>
+        </section>
       ) : (
         <>
           <div className="stats">
             <Stat value={course.known} label={t.known} />
             <Stat value={course.learning} label={t.learning} />
-            <Stat value={course.due} label={t.due} />
+            <Stat value={course.recovered} label={t.recovered} />
           </div>
 
-          {course.startRank === null ? (
+          {!started ? (
             <section className="question__actions">
               <p className="muted">{t.findLevelHint}</p>
-              <Link to={`/${lang}/assessment`} className="button-link button--primary">
+              <Link to={`/${lang}/assessment`} className="button-link button--primary" viewTransition>
                 {t.findLevel}
               </Link>
               <button type="button" className="button--plain" onClick={() => void startFromBeginning()}>
@@ -61,14 +74,22 @@ export default function CoursePage() {
             </section>
           ) : (
             <ul className="rows" style={{ "--inset": "2.6rem" } as CSSProperties}>
-              <RowLink to={`/${lang}/learn`} icon={BookOpen} title={t.learn} subtitle={t.learnFrom(course.startRank)} />
-              <RowLink to={`/${lang}/review`} icon={Repeat} title={t.review} meta={t.reviewDue(course.due)} />
+              <RowLink to={`/${lang}/study`} icon={BookOpen} title={t.study} subtitle={t.studySubtitle(course.due, course.learning)} />
               <RowLink to={`/${lang}/words`} icon={List} title={t.words} meta={t.wordsCount(course.known + course.learning)} />
               <RowLink to={`/${lang}/assessment`} icon={Gauge} title={t.retakeAssessment} />
             </ul>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function CourseSkeleton() {
+  return (
+    <div className="question" aria-busy="true" aria-label={t.loading}>
+      <div className="skeleton skeleton--stats" />
+      <div className="skeleton skeleton--block" />
     </div>
   );
 }
@@ -86,7 +107,7 @@ function RowLink(props: { to: string; icon: LucideIcon; title: string; subtitle?
   const Icon = props.icon;
   return (
     <li>
-      <Link to={props.to} className="row row--link">
+      <Link to={props.to} className="row row--link" viewTransition>
         <Icon className="row__icon" size={22} strokeWidth={1.75} aria-hidden="true" />
         <span className="row__body">
           <span className="row__title">{props.title}</span>

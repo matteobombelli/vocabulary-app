@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { Card, Status } from "../../shared/api";
+import type { Status, StudySession } from "../../shared/api";
 import { gradingState, monthKey } from "../../worker/services/budget";
 import { cookieHeader, jsonRequest, registerAndLogin, request, rightAnswer, seedWords } from "./helpers";
 
@@ -48,18 +48,24 @@ describe("budget guard", () => {
     await request("/courses/en/start-from-beginning", { method: "POST", headers: cookieHeader(cookie) });
     expect(await status(cookie)).toMatchObject({ choiceOnly: true, reason: "budget" });
 
-    const res = await request("/courses/en/learn", { headers: cookieHeader(cookie) });
-    const { cards } = (await res.json()) as { cards: Card[] };
-    expect(cards.every((c) => c.kind === "choice" && c.options?.length === 4)).toBe(true);
+    const res = await request("/courses/en/session", { headers: cookieHeader(cookie) });
+    const { session } = (await res.json()) as { session: StudySession };
+    expect(session.status.choiceOnly).toBe(true);
+    const cards = session.words;
 
-    const typed = await jsonRequest("/courses/en/answer", "POST", { wordId: cards[0].wordId, mode: "learn", kind: "typed", answer: "x" }, cookie);
+    const typed = await jsonRequest(
+      "/courses/en/answer",
+      "POST",
+      { wordId: cards[0].wordId, stage: "intro", game: "sentence", kind: "typed", answer: "x" },
+      cookie,
+    );
     expect(typed.status).toBe(409);
     expect(await typed.json()).toEqual({ error: "Typed answers are paused", details: { reason: "budget" } });
 
     const choice = await jsonRequest(
       "/courses/en/answer",
       "POST",
-      { wordId: cards[0].wordId, mode: "learn", kind: "choice", answer: rightAnswer(cards[0].lemma) },
+      { wordId: cards[0].wordId, stage: "intro", game: "mc", kind: "choice", answer: rightAnswer(cards[0].lemma) },
       cookie,
     );
     expect(choice.status).toBe(200);
@@ -83,9 +89,14 @@ describe("budget guard", () => {
     const { cookie } = await registerAndLogin(email());
     await request("/courses/en/start-from-beginning", { method: "POST", headers: cookieHeader(cookie) });
     const before = await env.DB.prepare("SELECT calls FROM api_usage WHERE month = ?").bind(monthKey(Date.now())).first<{ calls: number }>();
-    const res = await request("/courses/en/learn", { headers: cookieHeader(cookie) });
-    const { cards } = (await res.json()) as { cards: Card[] };
-    await jsonRequest("/courses/en/answer", "POST", { wordId: cards[0].wordId, mode: "learn", kind: "typed", answer: "anything" }, cookie);
+    const res = await request("/courses/en/session", { headers: cookieHeader(cookie) });
+    const { session } = (await res.json()) as { session: StudySession };
+    await jsonRequest(
+      "/courses/en/answer",
+      "POST",
+      { wordId: session.words[0].wordId, stage: "define", game: "define", kind: "typed", answer: "anything" },
+      cookie,
+    );
     const after = await env.DB.prepare("SELECT calls FROM api_usage WHERE month = ?").bind(monthKey(Date.now())).first<{ calls: number }>();
     expect(after!.calls).toBe((before?.calls ?? 0) + 1);
   });

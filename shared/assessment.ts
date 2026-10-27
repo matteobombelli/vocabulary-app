@@ -52,14 +52,15 @@ export function bandRange(band: number, maxRank: number): [number, number] {
   return [band * BAND_SIZE + 1, Math.min((band + 1) * BAND_SIZE, maxRank)];
 }
 
-export function initialState(maxRank: number): AssessmentState {
+/** A fresh assessment; the staircase starts at band (the middle when none is given). */
+export function initialState(maxRank: number, band?: number): AssessmentState {
   const bands = bandCount(maxRank);
   return {
     maxRank,
     responses: [],
     asked: [],
     pending: null,
-    band: Math.floor(bands / 2),
+    band: band ?? Math.floor(bands / 2),
     step: Math.max(1, Math.round(bands / 4)),
     lastMove: 0,
   };

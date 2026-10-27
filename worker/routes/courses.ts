@@ -1,4 +1,4 @@
-import { CourseSettings, DEF_LANGS, LANGS } from "../../shared/api";
+import { CourseSettings, DEF_LANGS, LANGS, LevelBody } from "../../shared/api";
 import { requireUser } from "../auth/session";
 import { getCourse, parseLang, toCourse } from "../db";
 import { json, parseJson } from "../http";
@@ -37,12 +37,21 @@ export function registerCourseRoutes(r: Router): void {
     return json({ course: await toCourse(c.env.DB, await getCourse(c.env.DB, user.id, lang)) });
   });
 
+  r.put("/courses/:lang/level", async (c) => {
+    const user = await requireUser(c);
+    const lang = parseLang(c.params.lang);
+    const { level } = await parseJson(c.req, LevelBody);
+    await getCourse(c.env.DB, user.id, lang);
+    await c.env.DB.prepare("UPDATE courses SET level = ? WHERE user_id = ? AND lang = ?").bind(level, user.id, lang).run();
+    return json({ course: await toCourse(c.env.DB, await getCourse(c.env.DB, user.id, lang)) });
+  });
+
   // Starts learning from the most frequent words, without an assessment.
   r.post("/courses/:lang/start-from-beginning", async (c) => {
     const user = await requireUser(c);
     const lang = parseLang(c.params.lang);
     await getCourse(c.env.DB, user.id, lang);
-    await c.env.DB.prepare("UPDATE courses SET start_rank = 1, cursor_rank = 0 WHERE user_id = ? AND lang = ?")
+    await c.env.DB.prepare("UPDATE courses SET start_rank = 1, cursor_rank = 0, adapt_right = 0, adapt_total = 0 WHERE user_id = ? AND lang = ?")
       .bind(user.id, lang)
       .run();
     return json({ course: await toCourse(c.env.DB, await getCourse(c.env.DB, user.id, lang)) });

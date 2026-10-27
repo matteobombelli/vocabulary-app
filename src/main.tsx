@@ -33,8 +33,10 @@ const router = createBrowserRouter(
                 { path: "settings", element: <SettingsPage /> },
                 { path: ":lang", element: <CoursePage /> },
                 { path: ":lang/assessment", element: <AssessmentPage /> },
-                { path: ":lang/learn", element: <StudyPage mode="learn" /> },
-                { path: ":lang/review", element: <StudyPage mode="review" /> },
+                { path: ":lang/study", element: <StudyPage /> },
+                // Learn and Review were one page each before the mixed study session.
+                { path: ":lang/learn", element: <Navigate to="../study" relative="path" replace /> },
+                { path: ":lang/review", element: <Navigate to="../study" relative="path" replace /> },
                 { path: ":lang/words", element: <WordsPage /> },
                 { path: ":lang/settings", element: <Navigate to="/settings" replace /> },
               ],

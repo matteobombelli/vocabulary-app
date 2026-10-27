@@ -2,15 +2,40 @@
 
 Vocabulary trainer at https://vocab.matteob.dev, with English and French courses.
 
+- **Level**: each course starts by asking how well you know the language (beginner, intermediate,
+  fluent, native). It decides which words you're taught, where the assessment starts, and which
+  games you get (`shared/levels.ts`).
 - **Assessment**: about 50 adaptive questions, mostly multiple choice with some typed definitions. They
   estimate how many words of the frequency list you know and where learning should start.
-- **Learning**: new words in frequency order from that point, test-first. You type a definition or
-  press "I don't know", and Claude Haiku grades typed answers (any real sense of the word counts).
-  Every answer shows the definition, dictionary glosses and an example. Missed words come back 3–5
-  cards later and again at the start of the next session.
-- **Review**: Leitner boxes at 1, 3, 7, 14 and 30 days.
+- **Study**: one mixed session of decayed words, words in progress and new words in frequency
+  order. Every word goes through a lifecycle (`shared/lifecycle.ts`):
+  1. **Intro**: pick its meaning from four, until right. The answer always shows the definition,
+     dictionary glosses and an example.
+  2. **Games**: 1 game when the intro was right on first sight, 3 otherwise, each a different kind:
+     match synonyms, match opposites (boards mix session words with known ones), pick the sentence
+     that uses it correctly, fill in the blank (a word bank for beginners, typed otherwise, with the
+     meaning as a hint), and write a sentence with it (graded by Claude).
+  3. **Define**: type what it means (graded by Claude), in a later session, at least 8 hours after
+     the last game.
+  4. **Known**: no longer tested, but used in boards. It decays back to define after 7 days, then 14,
+     30 and 90 after each new definition, and never after the fifth.
+
+  A miss never moves a word back; it comes back 3–5 cards later. Words missed at any stage and
+  learned since are listed as **Recovered**.
+- **Adaptive placement**: every 20 first-sight answers on new words, 85% or more right moves new
+  words a band (2,500 ranks) rarer, 50% or less a band commoner.
+- **Word tiers**: core (usefulness 4–5), general (3), rare (2) and never taught (ineligible, or rare
+  and technical or jargon). Beginners get core words, intermediate learners core and general,
+  fluent and native speakers all three. Tiers apply to the assessment too.
 - **French**: each user picks whether definitions are shown in French or English, and which
   language typed answers may be in (Settings on the French course).
+
+The study page gets the whole session in one request (prefetched from the course page) and runs it
+on the client with `shared/session.ts`, so cards follow each other without a round trip: answers
+that can be checked locally get instant feedback and are posted in the background, in order; only
+typed definitions and sentences wait for the grader. Game content (synonyms, antonyms, cloze and
+usage sentences) comes from the pipeline's `games` stage; until a word has it, its games fall back
+to writing a sentence or the meaning multiple choice.
 
 The UI follows todo.matteob.dev's design system (`src/styles.css` ports its tokens and components):
 Apple's system colours and font, grouped cells, a tab bar on phones, a header on tablets and a
@@ -48,8 +73,9 @@ when it shares a word of four or more letters with the definition. Set `GRADER_M
 only by the seed. Ids are the language base plus rank (en 1,000,000, fr 2,000,000). Ranks cover every
 lemma that passed the dictionary filters; `eligible` marks those that can be taught.
 
-D1 bills rows scanned, so every per-request query is an index range: words by `(lang, eligible,
-rank)`, a user's words by `(user_id, lang, status, due_at)`, attempts by `(user_id, created_at)`.
+D1 bills rows scanned, so every per-request query is an index range: words by `(lang, tier, rank)`
+(one range per tier of the learner's level), a user's words by `(user_id, lang, status, due_at)`,
+attempts by `(user_id, created_at)`. `migrations/0003_lifecycle.sql` describes the v2 columns.
 
 ```bash
 npm run db:migration -- <name>   # create migrations/NNNN_<name>.sql
@@ -58,7 +84,7 @@ npm run db:migrate:local
 
 ## Grading and budget
 
-`worker/services/grader.ts` grades every typed answer with `claude-haiku-5-5` (low effort) and gets
+`worker/services/grader.ts` grades every typed definition and sentence with `claude-haiku-5-5` (low effort) and gets
 back a structured verdict (correct / partial / incorrect) plus one line of feedback. A "partial"
 verdict, where Haiku is least reliable, is graded again by `claude-sonnet-5-5` (medium effort), and
 Sonnet's verdict stands. The system prompt is the same for every answer, so it is prompt-cached.
@@ -90,12 +116,13 @@ npx playwright install chromium   # once
 npm run test:e2e                  # Playwright against wrangler dev on :8788 with fixture words
 ```
 
-- `test/unit/`: assessment fit (simulated test-takers recover their vocabulary size), Leitner
-  scheduling, the session queue.
+- `test/unit/`: assessment fit (simulated test-takers recover their vocabulary size), the word
+  lifecycle, the session engine, the session queue.
 - `test/worker/`: every route in the Workers runtime, with migrations applied, fixture words, and
   the stub grader.
-- `e2e/`: registration, a learning session where a missed word comes back, French settings, the
-  assessment, deep links, the manifest and the service worker.
+- `e2e/`: registration, choosing a level and a study session where a missed word comes back
+  through the games, levels and French settings, the assessment, deep links, the manifest and the
+  service worker.
 
 ## Deploy
 

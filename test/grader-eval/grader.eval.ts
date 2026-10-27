@@ -60,7 +60,7 @@ it.each(["en", "fr"] as const)("grader agrees with the %s labels", async (lang) 
   const env = { GRADER_MODE: "claude", ANTHROPIC_API_KEY: apiKey() } as Env;
   const cases = load(lang);
   const escalate = process.env.EVAL_ESCALATE !== "0";
-  const graded = await mapLimit(cases, 5, async (c) => ({ c, g: await grade(env, { ...c, wordLang: c.lang }, escalate) }));
+  const graded = await mapLimit(cases, 5, async (c) => ({ c, g: await grade(env, { ...c, task: "define", wordLang: c.lang }, escalate) }));
 
   const isRight = (c: Case, v: Verdict) => (v === "correct") === (c.expected === "correct");
   const misses = graded.filter(({ c, g }) => g.verdict !== c.expected);

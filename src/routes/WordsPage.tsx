@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router";
-import type { WordListItem } from "../../shared/api";
+import type { WordListItem, WordListTab } from "../../shared/api";
 import { study } from "../api/endpoints";
 import { NavBar } from "../components/NavBar";
 import { Segmented } from "../components/Segmented";
-import { Spinner } from "../components/Spinner";
 import { LANGUAGE_NAMES, t } from "../strings";
 import { useLang } from "../useLang";
 
-type Tab = "known" | "learning";
+type Tab = WordListTab;
+
+function meta(w: WordListItem, tab: Tab): string {
+  const date = (t: number) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (tab === "recovered") return t.missed(w.failCount);
+  if (w.decayed) return t.stageRefresh;
+  if (w.stage === "intro") return t.stageIntro;
+  if (w.stage === "games") return t.stageGames(w.gamesDone, w.gamesNeeded);
+  if (w.stage === "define") return t.stageDefine;
+  return w.dueAt !== null ? t.refreshOn(date(w.dueAt)) : `#${w.rank.toLocaleString()}`;
+}
 
 export default function WordsPage() {
   const lang = useLang();
@@ -47,13 +56,15 @@ export default function WordsPage() {
         options={[
           { value: "known", label: t.knownTab },
           { value: "learning", label: t.learningTab },
+          { value: "recovered", label: t.recoveredTab },
         ]}
         value={tab}
         onChange={setTab}
       />
+      {tab === "recovered" && <p className="group-hint">{t.recoveredHint}</p>}
       {error && <p className="error">{t.somethingWrong}</p>}
       {!words ? (
-        <Spinner />
+        <div className="skeleton skeleton--block" aria-busy="true" aria-label={t.loading} />
       ) : words.length === 0 ? (
         <p className="empty">{t.noWords}</p>
       ) : (
@@ -65,11 +76,7 @@ export default function WordsPage() {
                   <span className="row__title">{w.lemma}</span>
                   <span className="row__subtitle">{w.definition}</span>
                 </span>
-                <span className="row__meta">
-                  {w.box !== null && w.box > 0 && w.dueAt !== null
-                    ? t.dueOn(new Date(w.dueAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }))
-                    : `#${w.rank.toLocaleString()}`}
-                </span>
+                <span className={`row__meta${tab === "learning" ? " chip" : ""}`}>{meta(w, tab)}</span>
               </div>
             </li>
           ))}

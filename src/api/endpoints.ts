@@ -3,16 +3,19 @@ import type {
   AnswerResult,
   AssessmentAnswerResponse,
   AssessmentStep,
-  Card,
   Course,
   CourseSettings,
   Lang,
   LoginBody,
   RegisterBody,
   Status,
+  Level,
   StudyAnswer,
+  StudyAnswerResponse,
+  StudySession,
   User,
   WordListItem,
+  WordListTab,
 } from "../../shared/api";
 import { api } from "./client";
 
@@ -30,6 +33,8 @@ export const courses = {
   get: (lang: Lang) => api<{ course: Course }>(`/courses/${lang}`).then((r) => r.course),
   settings: (lang: Lang, body: CourseSettings) =>
     api<{ course: Course }>(`/courses/${lang}/settings`, { method: "PUT", body }).then((r) => r.course),
+  level: (lang: Lang, level: Level) =>
+    api<{ course: Course }>(`/courses/${lang}/level`, { method: "PUT", body: { level } }).then((r) => r.course),
   startFromBeginning: (lang: Lang) =>
     api<{ course: Course }>(`/courses/${lang}/start-from-beginning`, { method: "POST" }).then((r) => r.course),
 };
@@ -41,10 +46,8 @@ export const assessment = {
 };
 
 export const study = {
-  learn: (lang: Lang) => api<{ cards: Card[] }>(`/courses/${lang}/learn`).then((r) => r.cards),
-  review: (lang: Lang) => api<{ cards: Card[] }>(`/courses/${lang}/review`).then((r) => r.cards),
-  answer: (lang: Lang, body: StudyAnswer) =>
-    api<{ result: AnswerResult }>(`/courses/${lang}/answer`, { body }).then((r) => r.result),
-  words: (lang: Lang, status: "known" | "learning", offset: number) =>
-    api<{ words: WordListItem[]; hasMore: boolean }>(`/courses/${lang}/words?status=${status}&offset=${offset}`),
+  session: (lang: Lang) => api<{ session: StudySession }>(`/courses/${lang}/session`).then((r) => r.session),
+  answer: (lang: Lang, body: StudyAnswer) => api<StudyAnswerResponse>(`/courses/${lang}/answer`, { body }),
+  words: (lang: Lang, tab: WordListTab, offset: number) =>
+    api<{ words: WordListItem[]; hasMore: boolean }>(`/courses/${lang}/words?status=${tab}&offset=${offset}`),
 };

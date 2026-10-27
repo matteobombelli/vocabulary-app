@@ -21,6 +21,14 @@ export function rightAnswer(lemma: string, defLang = "en"): string {
   return `${lemma}ness (${defLang})`;
 }
 
+/** A fixture word's lemma from its rank (test/fixtures/words.ts). */
+export function lemmaFor(lang: "en" | "fr", rank: number): string {
+  const syllables = ["ba", "ko", "ti", "ru", "me", "sa", "lo", "pe", "du", "vi"];
+  let s = lang === "en" ? "z" : "x";
+  for (let n = rank; n > 0; n = Math.floor(n / 10)) s += syllables[n % 10];
+  return s;
+}
+
 export async function currentLemma(page: Page): Promise<string> {
   return (await page.getByRole("heading", { level: 2 }).textContent())!.trim();
 }

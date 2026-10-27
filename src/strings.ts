@@ -1,5 +1,5 @@
 // Every UI string lives here, so a French interface can be added by swapping this module.
-import type { AnswerLang, Lang, Verdict } from "../shared/api";
+import type { AnswerLang, Lang, Level, Verdict } from "../shared/api";
 
 export const LANGUAGE_NAMES: Record<Lang, string> = { en: "English", fr: "Français" };
 
@@ -9,6 +9,13 @@ export const VERDICT_LABELS: Record<Verdict, string> = {
   correct: "Correct",
   partial: "Partly right",
   incorrect: "Not quite",
+};
+
+export const LEVEL_NAMES: Record<Level, { title: string; hint: string }> = {
+  beginner: { title: "Beginner", hint: "I know everyday basics. Common words only, with word banks." },
+  intermediate: { title: "Intermediate", hint: "I get by in most situations. Common and useful words." },
+  fluent: { title: "Fluent", hint: "I read and talk comfortably. Rarer and literary words too." },
+  native: { title: "Native", hint: "It's my first language. Start further up the list." },
 };
 
 export const t = {
@@ -24,16 +31,18 @@ export const t = {
   // Course
   known: "Known",
   learning: "Learning",
+  recovered: "Recovered",
   due: "Due",
+  levelQuestion: (lang: string) => `How well do you know ${lang}?`,
+  levelHint: "This sets which words you'll learn and how you practise them. You can change it in Settings.",
+  study: "Study",
+  studySubtitle: (due: number, learning: number) =>
+    [due > 0 && `${due} to refresh`, learning > 0 && `${learning} in progress`].filter(Boolean).join(" · ") || "New words",
   estimate: (n: number) => `About ${n.toLocaleString()} words known`,
   findLevel: "Find your level",
   findLevelHint: "About 50 quick questions estimate your vocabulary and pick where to start.",
   retakeAssessment: "Retake the assessment",
   startFromBeginning: "Start from the most common words",
-  learn: "Learn new words",
-  learnFrom: (rank: number) => `From word #${rank.toLocaleString()}`,
-  review: "Review",
-  reviewDue: (n: number) => (n > 0 ? `${n} due` : "Nothing due"),
   words: "Your words",
   wordsCount: (n: number) => n.toLocaleString(),
   noWordsYet: "This language's word list is not loaded yet.",
@@ -68,27 +77,62 @@ export const t = {
   startLearning: "Start learning",
 
   // Study
-  learnTitle: "Learn",
-  reviewTitle: "Review",
-  sessionDone: "Session done",
-  sessionSummary: (right: number, total: number) => `${right} of ${total} right the first time.`,
-  nothingToReview: "Nothing is due. Come back later.",
-  nothingToLearn: "You've reached the end of the list.",
-  moreWords: "Next words",
+  studyTitle: "Study",
+  sessionDone: "Nice work",
+  sessionSummary: (right: number, total: number) => `${right} of ${total} answers right.`,
+  nothingToStudy: "Nothing to study right now. Words waiting to be defined come back in a few hours.",
+  keepGoing: "Keep going",
+  summary: {
+    answered: "Answers",
+    right: "Right",
+    introduced: "New words",
+    gamesWon: "Games won",
+    completed: "Learned",
+    recovered: "Comebacks",
+  },
   newWord: "New word",
   again: "Again",
+  refresh: "Refresh",
+  labels: {
+    usage: "Correct usage",
+    cloze: "Fill in the blank",
+    sentence: "Use it in a sentence",
+    synonym: "Match the synonyms",
+    antonym: "Match the opposites",
+    define: "Define it",
+    mc: "Meaning",
+  },
+  whichUsage: "Which sentence uses it correctly?",
+  pickBlank: "Which word fits?",
+  typeBlank: "Type the missing word",
+  hint: "Meaning",
+  writeSentence: "Write a sentence that uses it",
+  sentenceIn: (lang: string) => `Write it in ${lang}.`,
+  matchHint: "Tap a word, then its partner.",
+  checking: "Checking…",
+  rightAnswer: "Answer",
+  levelUp: "You're flying — moving you to harder words.",
+  levelDown: "Let's ease off — moving you to commoner words.",
+  saveFailed: "Couldn't save an answer. Check your connection.",
 
   // Words
   wordsTitle: "Your words",
   knownTab: "Known",
   learningTab: "Learning",
+  recoveredTab: "Recovered",
+  recoveredHint: "Words you missed at some point and have learned since.",
   noWords: "No words here yet.",
   loadMore: "Load more",
-  box: (n: number) => `Box ${n}`,
-  dueOn: (d: string) => `due ${d}`,
+  stageIntro: "New",
+  stageGames: (done: number, needed: number) => `Games ${done}/${needed}`,
+  stageDefine: "Define",
+  stageRefresh: "Refresh",
+  missed: (n: number) => `missed ${n}×`,
+  refreshOn: (d: string) => `refresh ${d}`,
 
   // Settings
   settings: "Settings",
+  level: "Level",
   definitionsIn: "Definitions",
   answersIn: "Typed answers",
   frenchHint: "Definitions and multiple-choice options show in this language. Typed answers are accepted in the language chosen below it.",

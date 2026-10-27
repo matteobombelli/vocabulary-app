@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router";
-import type { Answer, AnswerResult, AssessmentOutcome, AssessmentStep, Course, Status } from "../../shared/api";
+import type { Answer, AnswerResult, AssessmentOutcome, AssessmentStep, Status } from "../../shared/api";
+import { courseKey, setCached, useCourse } from "../api/cache";
 import { ApiError } from "../api/client";
 import { assessment, courses, status as fetchStatus } from "../api/endpoints";
 import { AnswerPanel } from "../components/AnswerPanel";
@@ -19,7 +20,7 @@ type Phase =
 
 export default function AssessmentPage() {
   const lang = useLang();
-  const [course, setCourse] = useState<Course | null>(null);
+  const { data: course, error: courseError } = useCourse(lang);
   const [status, setStatus] = useState<Status | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "intro" });
   const [busy, setBusy] = useState(false);
@@ -27,7 +28,6 @@ export default function AssessmentPage() {
 
   useEffect(() => {
     if (!lang) return;
-    courses.get(lang).then(setCourse, () => setError(t.somethingWrong));
     fetchStatus().then(setStatus, () => undefined);
   }, [lang]);
 
@@ -52,6 +52,7 @@ export default function AssessmentPage() {
       try {
         const res = await assessment.answer(lang!, step.assessmentId, { ...answer, wordId: step.card.wordId });
         setPhase({ kind: "answered", step, ...res });
+        if (res.outcome) courses.get(lang!).then((c) => setCached(courseKey(lang!), c), () => undefined);
       } catch (err) {
         setError(err instanceof ApiError ? err.message : t.somethingWrong);
       } finally {
@@ -85,8 +86,9 @@ export default function AssessmentPage() {
       <ChoiceOnlyBanner status={status} />
       {error && <p className="error">{error}</p>}
 
+      {courseError && !course && <p className="error">{t.somethingWrong}</p>}
       {!course ? (
-        !error && <Spinner />
+        !error && !courseError && <Spinner />
       ) : (
         <>
           {phase.kind === "intro" && (
@@ -114,7 +116,7 @@ export default function AssessmentPage() {
                 <div className="progress__bar" style={{ width: `${(phase.outcome.estSize / phase.outcome.totalWords) * 100}%` }} />
               </div>
               <p className="muted">{t.resultStart(phase.outcome.startRank)}</p>
-              <Link to={`/${lang}/learn`} className="button-link button--primary">
+              <Link to={`/${lang}/study`} className="button-link button--primary" viewTransition>
                 {t.startLearning}
               </Link>
             </div>

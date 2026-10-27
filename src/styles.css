@@ -136,6 +136,7 @@ a {
 
 button,
 input,
+textarea,
 .button-link {
   font: inherit;
   color: inherit;
@@ -198,7 +199,8 @@ button:disabled {
   outline-offset: 2px;
 }
 
-input:focus-visible {
+input:focus-visible,
+textarea:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
@@ -1027,6 +1029,258 @@ input:focus-visible {
   margin: 0 -1rem -2rem;
   padding: 0.75rem 1rem calc(1rem + env(safe-area-inset-bottom));
   background: linear-gradient(transparent, var(--bg) 0.75rem);
+}
+
+/* Study: cards slide in, answers colour their option, boards shake on a miss. */
+
+.card-enter {
+  animation: card-in var(--medium) var(--ease-out);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.option {
+  gap: 0.75rem;
+}
+
+.option__mark {
+  flex: none;
+  margin-left: auto;
+  animation: pop var(--medium) var(--ease-spring);
+}
+
+.group__button.option:disabled {
+  opacity: 1;
+}
+
+.option--right {
+  background-color: color-mix(in srgb, var(--success) 16%, transparent);
+}
+
+.option--right .option__mark {
+  color: var(--success);
+}
+
+.option--wrong {
+  background-color: color-mix(in srgb, var(--danger) 14%, transparent);
+  animation: shake 360ms var(--ease-out);
+}
+
+.option--wrong .option__mark {
+  color: var(--danger);
+}
+
+.option--dim {
+  opacity: 0.45 !important;
+}
+
+/* A sentence with its blank: a line to fill, or the filled-in word. */
+.cloze {
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+.cloze__blank {
+  display: inline-block;
+  min-width: 4rem;
+  border-bottom: 2px solid var(--accent);
+}
+
+.cloze__fill {
+  font-weight: 600;
+  color: var(--success);
+}
+
+.group__input:is(textarea) {
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.is-checking .group {
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 10%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.1s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* Synonym and antonym boards: two columns of tiles. */
+.board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.board__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.tile {
+  min-height: 3.25rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  transition:
+    background var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-spring),
+    opacity var(--medium) var(--ease-out);
+}
+
+.tile--selected {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--accent);
+  transform: scale(1.03);
+}
+
+.tile--wrong {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: var(--danger);
+  animation: shake 360ms var(--ease-out);
+}
+
+.tile--matched {
+  background: color-mix(in srgb, var(--success) 16%, var(--surface));
+  color: var(--success);
+  animation: pop var(--medium) var(--ease-spring);
+}
+
+button.tile--matched:disabled {
+  opacity: 0.55;
+}
+
+.feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  animation: rise-in var(--medium) var(--ease-out);
+}
+
+.feedback__line {
+  flex-basis: 100%;
+}
+
+/* A right answer moves on by itself: the button fills up while it waits. */
+.button--auto {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.22) 50%, transparent 50%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  animation: auto-fill 900ms linear forwards;
+}
+
+@keyframes auto-fill {
+  to {
+    background-position: 0 0;
+  }
+}
+
+.summary__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+
+.summary__tile {
+  padding: 0.9rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+  animation: pop var(--medium) var(--ease-spring) backwards;
+}
+
+/* Placeholders while a page's data loads for the first time. */
+.skeleton {
+  border-radius: var(--radius-lg);
+  background: linear-gradient(100deg, var(--fill) 30%, color-mix(in srgb, var(--fill) 40%, transparent) 50%, var(--fill) 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.skeleton--label {
+  width: 5rem;
+  height: 0.9rem;
+}
+
+.skeleton--title {
+  width: 60%;
+  height: 2.5rem;
+}
+
+.skeleton--stats {
+  height: 4.5rem;
+}
+
+.skeleton--block {
+  height: 11rem;
+}
+
+/* A word's stage on the words page. */
+.chip {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--fill);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* The level picker: rows with a title and a hint, the chosen one ticked. */
+.group__button.level {
+  gap: 0.75rem;
+}
+
+.level .row__title {
+  color: var(--fg);
+}
+
+.level__check {
+  flex: none;
+  color: var(--accent);
+  animation: pop var(--medium) var(--ease-spring);
+}
+
+.settings-course {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.group-label--course {
+  color: var(--fg);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+/* Page changes cross-fade where the browser supports view transitions. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--fast);
 }
 
 @media (prefers-reduced-motion: reduce) {

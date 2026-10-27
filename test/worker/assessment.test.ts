@@ -85,6 +85,21 @@ describe("assessment", () => {
     expect(again.status).toBe(409);
   });
 
+  it("starts a beginner at the commonest band and asks only core words", async () => {
+    const { cookie } = await registerAndLogin(email());
+    await jsonRequest("/courses/en/level", "PUT", { level: "beginner" }, cookie);
+    const start = await request("/courses/en/assessment", { method: "POST", headers: cookieHeader(cookie) });
+    let step: AssessmentStep | null = ((await start.json()) as { step: AssessmentStep }).step;
+    expect(rankOf(step.card)).toBeLessThanOrEqual(2500);
+    for (let i = 0; i < 20 && step; i++) {
+      // Fixture tiers: rank % 10 never taught, rank % 7 general; beginners get core words only.
+      const rank = rankOf(step.card);
+      expect(rank % 10 !== 0 && rank % 7 !== 0).toBe(true);
+      const res = await jsonRequest(`/courses/en/assessment/${step.assessmentId}/answer`, "POST", answerFor(step.card), cookie);
+      step = ((await res.json()) as AssessmentAnswerResponse).next;
+    }
+  });
+
   it("is private to its user", async () => {
     const a = await registerAndLogin(email());
     const b = await registerAndLogin(email());
