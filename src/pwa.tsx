@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { APP_BASE } from "../shared/api";
 import { t } from "./strings";
 
 /**
@@ -32,7 +31,7 @@ export function UpdateToast() {
         if (sw.state === "redundant") setWaiting((current) => (current === sw ? null : current));
       });
     };
-    void container.register(`${APP_BASE}/sw.js`, { scope: `${APP_BASE}/`, updateViaCache: "none" }).then((reg) => {
+    void container.register("/sw.js", { scope: "/", updateViaCache: "none" }).then((reg) => {
       // Some contexts (automation that blocks workers) resolve without a registration.
       if (!reg) return;
       registration = reg;

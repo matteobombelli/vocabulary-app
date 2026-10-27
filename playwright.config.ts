@@ -14,7 +14,7 @@ export default defineConfig({
   reporter: [["list"]],
   timeout: 30_000,
   use: {
-    baseURL: `http://localhost:${port}/projects/vocabulary-app/`,
+    baseURL: `http://localhost:${port}/`,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
@@ -27,7 +27,7 @@ export default defineConfig({
       "npx vite build",
       `npx wrangler dev --port ${port} --persist-to ${state} --var REGISTRATION_SECRET:${INVITE_CODE} --var GRADER_MODE:stub --show-interactive-dev-session=false`,
     ].join(" && "),
-    url: `http://localhost:${port}/projects/vocabulary-app/api/health`,
+    url: `http://localhost:${port}/api/health`,
     reuseExistingServer: false,
     timeout: 120_000,
   },

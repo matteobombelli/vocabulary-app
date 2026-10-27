@@ -2,7 +2,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
-const base = "/projects/vocabulary-app/";
+const base = "/";
 
 // Workers Assets `not_found_handling: "404-page"` walks up from the request path to the
 // nearest 404.html, so a copy of index.html there makes SPA deep links render the app.
@@ -56,11 +56,6 @@ export default defineConfig({
       },
     }),
   ],
-  build: {
-    // Mirrors the URL path so Workers Assets serves files without rewriting.
-    outDir: `dist${base}`,
-    emptyOutDir: true,
-  },
   server: {
     proxy: {
       [`${base}api`]: "http://localhost:8787",

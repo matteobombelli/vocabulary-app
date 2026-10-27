@@ -1,6 +1,6 @@
 # vocabulary-app
 
-Vocabulary trainer at https://apps.matteob.dev/projects/vocabulary-app, with English and French courses.
+Vocabulary trainer at https://vocab.matteob.dev, with English and French courses.
 
 - **Assessment**: about 50 adaptive questions, mostly multiple choice with some typed definitions. They
   estimate how many words of the frequency list you know and where learning should start.
@@ -37,7 +37,7 @@ npm run typecheck
 npm run types                    # regenerate worker-configuration.d.ts after editing wrangler.jsonc
 ```
 
-Open http://localhost:8787/projects/vocabulary-app/ and register with the invite code from
+Open http://localhost:8787/ and register with the invite code from
 `.dev.vars`. With `GRADER_MODE=stub` typed answers are graded locally: an answer counts as correct
 when it shares a word of four or more letters with the definition. Set `GRADER_MODE=claude` and
 `ANTHROPIC_API_KEY` to use the real grader.
@@ -113,11 +113,9 @@ for f in pipeline/data/seed/*.sql; do npx wrangler d1 execute vocabulary-app --r
 
 ## Routing
 
-- `apps.matteob.dev` is a Cloudflare Tunnel to the home server. The Worker route
-  `apps.matteob.dev/projects/vocabulary-app*` in `wrangler.jsonc` takes only this prefix; every other
-  path still goes to the tunnel.
-- Vite builds with `base: /projects/vocabulary-app/` into `dist/projects/vocabulary-app/`, so asset
-  paths match request paths. The Worker runs first only for `/projects/vocabulary-app/api/*`.
+- The Worker owns `vocab.matteob.dev` as a Custom Domain (`wrangler.jsonc`); `wrangler deploy`
+  creates the DNS record and certificate.
+- Vite builds into `dist/`, served from the root. The Worker runs first only for `/api/*`.
 - The `spa-404` Vite plugin emits `404.html`, which Workers Assets serves for deep links.
 
 ## Data licences

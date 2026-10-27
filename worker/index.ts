@@ -21,9 +21,7 @@ registerStudyRoutes(router);
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const { pathname } = new URL(request.url);
-    if (!pathname.startsWith(API_PREFIX)) {
-      return env.ASSETS.fetch(request);
-    }
-    return router.handle(request, env, ctx);
+    if (pathname === API_PREFIX || pathname.startsWith(`${API_PREFIX}/`)) return router.handle(request, env, ctx);
+    return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;

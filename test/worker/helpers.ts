@@ -7,7 +7,7 @@ interface TestUser {
   email: string;
 }
 
-export const API = "https://apps.matteob.dev/projects/vocabulary-app/api";
+export const API = "https://vocab.matteob.dev/api";
 
 export function request(path: string, init?: RequestInit): Promise<Response> {
   return exports.default.fetch(new Request(API + path, init));
