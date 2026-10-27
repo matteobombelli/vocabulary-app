@@ -43,7 +43,7 @@ export function QuestionCard({ card, answerLang, busy, label, onAnswer }: Props)
       <div>
         {label && <p className="text-xs font-semibold tracking-wide text-accent uppercase">{label}</p>}
         <h2 className="mt-1 text-4xl font-semibold tracking-tight break-words">{card.lemma}</h2>
-        <p className="mt-1 text-sm text-muted italic">{card.pos}</p>
+        <p className="mt-1 text-sm text-muted italic">{card.pos.split(",").join(", ")}</p>
       </div>
 
       {card.kind === "typed" ? (

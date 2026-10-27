@@ -17,6 +17,9 @@ export const t = {
   loading: "Loading",
   somethingWrong: "Something went wrong. Try again.",
   back: "Back",
+  newVersion: "New version available",
+  reload: "Reload",
+  offline: "You're offline. Answers need a connection.",
 
   // Home and course
   coursesTitle: "Your courses",

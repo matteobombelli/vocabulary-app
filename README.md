@@ -12,6 +12,11 @@ Vocabulary trainer at https://apps.matteob.dev/projects/vocabulary-app, with Eng
 - **French**: each user picks whether definitions are shown in French or English, and which
   language typed answers may be in (Settings on the French course).
 
+Installable as a PWA on phones and desktops ("Add to Home Screen"): a service worker caches the
+app shell, so the app opens instantly and says when it is offline; answers always need the network.
+A "New version available" toast offers a reload after each deploy. Icons come from
+`scripts/generate-icons.mjs` (`npm run icons`).
+
 Built with **Vite + React + Tailwind + TypeScript**, deployed as one Cloudflare Worker with static
 assets and a **D1** database (`vocabulary-app`). The word lists come from the offline pipeline in
 `pipeline/`.
@@ -86,7 +91,7 @@ npm run test:e2e                  # Playwright against wrangler dev on :8788 wit
 - `test/worker/`: every route in the Workers runtime, with migrations applied, fixture words, and
   the stub grader.
 - `e2e/`: registration, a learning session where a missed word comes back, French settings, the
-  assessment, deep links.
+  assessment, deep links, the manifest and the service worker.
 
 ## Deploy
 

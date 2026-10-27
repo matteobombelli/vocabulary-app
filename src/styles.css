@@ -67,8 +67,11 @@
 }
 
 @layer components {
+  .safe-area {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 font-medium text-fg no-underline transition-colors hover:border-accent disabled:opacity-50;
+    @apply inline-flex touch-manipulation items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 font-medium text-fg no-underline transition-colors hover:border-accent disabled:opacity-50;
   }
   .btn-primary {
     @apply border-accent bg-accent text-surface hover:opacity-90;

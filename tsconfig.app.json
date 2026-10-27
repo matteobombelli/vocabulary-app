@@ -10,7 +10,7 @@
     "composite": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "types": []
+    "types": ["vite/client"]
   },
   "include": ["src", "shared", "vite.config.ts"]
 }

@@ -42,9 +42,12 @@ export function AnswerPanel({ lemma, result, onContinue }: { lemma: string; resu
           <p className="mt-1 italic">{result.example}</p>
         </section>
       )}
-      <button ref={buttonRef} type="button" className="btn btn-primary" onClick={onContinue}>
-        {t.continue}
-      </button>
+      {/* Pinned to the bottom of the screen, so long definitions never push it out of reach on a phone. */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 rounded-b-xl bg-surface px-5 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+        <button ref={buttonRef} type="button" className="btn btn-primary w-full sm:w-auto" onClick={onContinue}>
+          {t.continue}
+        </button>
+      </div>
     </div>
   );
 }

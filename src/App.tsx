@@ -1,7 +1,23 @@
 import { LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import { UpdateToast } from "./pwa";
 import { t } from "./strings";
+
+function useOnline(): boolean {
+  const [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return online;
+}
 
 function Header() {
   const { user, logout } = useAuth();
@@ -30,15 +46,19 @@ function Header() {
 }
 
 export default function App() {
+  const online = useOnline();
   return (
     <AuthProvider>
-      <div className="flex min-h-dvh flex-col">
+      {/* Safe-area padding keeps content clear of notches and the home indicator (viewport-fit=cover). */}
+      <div className="safe-area flex min-h-dvh flex-col">
         <Header />
+        {!online && <p className="mx-auto mb-4 w-full max-w-2xl px-4 text-sm text-warn">{t.offline}</p>}
         <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-12">
           <Outlet />
         </main>
         <footer className="mx-auto max-w-2xl px-4 pb-6 text-xs text-muted">{t.attribution}</footer>
       </div>
+      <UpdateToast />
     </AuthProvider>
   );
 }
