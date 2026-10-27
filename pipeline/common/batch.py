@@ -24,7 +24,8 @@ PRICE = {
     "claude-sonnet-5-5": {"in": 1.00, "out": 5.00},
 }
 # Output tokens per word (thinking included), used until a collected stage gives a measured value.
-DEFAULT_OUT_PER_WORD = {("en", "gen"): 260, ("fr", "gen"): 480, ("en", "repair"): 120}
+DEFAULT_OUT_PER_WORD = {("en", "gen"): 260, ("fr", "gen"): 480, ("en", "repair"): 120,
+                        ("en", "games"): 350, ("fr", "games"): 450}
 MAX_TOKENS = 48000
 
 

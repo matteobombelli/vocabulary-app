@@ -3,8 +3,10 @@
     .venv/bin/python -I seed.py <lang> [--allow-missing]
 
 Every entry is Haiku's, with Sonnet's repair and repair-check fixes applied for English bands
-0-8 (source_model is Sonnet's for any word it rewrote). Writes data/seed/<lang>-NNN.sql (upserts into `words`, see migrations/0001_init.sql)
-and data/seed/<lang>-words.jsonl.gz. Load with:
+0-8 (source_model is Sonnet's for any word it rewrote). games is the games stage's content
+(games-pilot's where the full stage has none yet), or {} for a word without any. Writes
+data/seed/<lang>-NNN.sql (upserts into `words`, see migrations/0001_init.sql and
+0003_lifecycle.sql) and data/seed/<lang>-words.jsonl.gz. Load with:
 
     npx wrangler d1 execute vocabulary-app --remote --file pipeline/data/seed/<lang>-000.sql
 """
@@ -20,10 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import batch, prompts  # noqa: E402
 from common.paths import SEED  # noqa: E402
 from common.words import ID_BASE, read_lemmas  # noqa: E402
-from enrich import eligible, merged  # noqa: E402
+from enrich import eligible, final, games, tier  # noqa: E402
 
 COLUMNS = ["id", "lang", "lemma", "rank", "pos", "glosses", "definition", "distractors", "example",
-           "usefulness", "flags", "eligible", "band", "source_model"]
+           "usefulness", "flags", "eligible", "band", "source_model", "games", "tier"]
 ROWS_PER_FILE = 2500
 MAX_STATEMENT_BYTES = 60_000  # D1 caps one SQL statement at 100 KB
 
@@ -36,13 +38,16 @@ def sql_value(v) -> str:
 
 def build_rows(lang: str, allow_missing: bool) -> list[dict]:
     words = read_lemmas(lang)
-    entries = merged(lang, "haiku", "repair-check" if lang == "en" else None)
+    entries = final(lang)
+    game = games(lang)
     rows, missing = [], []
     for w in words:
         e = entries.get(w["rank"])
         if e is None:
             missing.append(w["lemma"])
             continue
+        elig = eligible(e["usefulness"], e["flags"])
+        g = game.get(w["rank"])
         rows.append({
             "id": ID_BASE[lang] + w["rank"],
             "lang": lang,
@@ -55,9 +60,11 @@ def build_rows(lang: str, allow_missing: bool) -> list[dict]:
             "example": e["example"],
             "usefulness": e["usefulness"],
             "flags": e["flags"],
-            "eligible": int(eligible(e["usefulness"], e["flags"])),
+            "eligible": int(elig),
             "band": w["band"],
             "source_model": e["model"],
+            "games": {k: g[k] for k in ("synonyms", "antonyms", "cloze", "usage")} if g else {},
+            "tier": tier(e["usefulness"], e["flags"], elig),
         })
     if missing:
         print(f"[{lang}] {len(missing):,} words have no enrichment, e.g. {missing[:15]}")
@@ -106,10 +113,14 @@ def main() -> None:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     n_elig = sum(r["eligible"] for r in rows)
+    tiers = {t: sum(r["tier"] == t for r in rows) for t in (3, 2, 1, 0)}
+    teach = [r for r in rows if r["tier"]]
+    n_games = sum(bool(r["games"]) for r in teach)
     models = {}
     for r in rows:
         models[r["source_model"]] = models.get(r["source_model"], 0) + 1
     print(f"[{a.lang}] {len(rows):,} rows ({n_elig:,} eligible), by model {models}")
+    print(f"[{a.lang}] tiers {tiers}; games for {n_games:,} of {len(teach):,} teachable words")
     print(f"[{a.lang}] wrote {len(paths)} SQL chunks ({paths[0].name} … {paths[-1].name}) and {out}")
 
 

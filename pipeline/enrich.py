@@ -15,11 +15,17 @@ Stages:
   haiku               Haiku on every lemma
   repair              Sonnet review-and-repair of every EN word in bands 0-8
   repair-check        Sonnet re-checks the words repair changed (optional; gives the after rate)
+  games-pilot         Haiku writes practice-game content for the teachable pilot words
+  games               Haiku writes practice-game content for every teachable word
 
 Repair flags only harmful problems: a distractor that is a real sense of the word, a wrong or
 minor-sense definition, a factual error, or an ungrammatical or wrong-sense example. It rewrites
 just the flagged fields. `bands` writes the per-band harmful rate before and after repair to
 data/en/bands.json.
+
+The games stages run on the final entries (haiku, plus repair and repair-check for English), so
+synonyms, antonyms, cloze and usage sentences fit the definition the app shows. Only teachable
+words (tier >= 1, see tier()) get games.
 
 submit only sends words of the stage that have no result yet and are not in flight, so running it
 again after collect retries failures (in chunks of 10 instead of 50).
@@ -50,6 +56,8 @@ STAGES = {
     "haiku": ("gen", HAIKU, "low"),
     "repair": ("repair", SONNET, "medium"),
     "repair-check": ("repair", SONNET, "medium"),
+    "games-pilot": ("games", HAIKU, "low"),
+    "games": ("games", HAIKU, "low"),
 }
 # For each repair stage: (stage whose entries it checks, repair stage whose fixes it applies first).
 REPAIR_SOURCES = {
@@ -63,11 +71,30 @@ PILOT_SIZE = 300
 REPAIR_MAX_BAND = 8  # ranks 1-22,500
 USEFULNESS_CUTOFF = 2
 BLOCKING_FLAGS = {"offensive", "archaic"}
+SPECIALIST_FLAGS = {"technical", "jargon"}
 SEED = 20261026
 
 
 def eligible(usefulness: int, flags: list[str]) -> bool:
     return usefulness >= USEFULNESS_CUTOFF and not (set(flags) & BLOCKING_FLAGS)
+
+
+def tier(usefulness: int, flags: list[str], is_eligible: bool) -> int:
+    """Which learners see the word: beginners tier 3, intermediate 2-3, fluent and native 1-3.
+    0 is never taught (ineligible, or a rare word that is also technical or jargon)."""
+    if not is_eligible:
+        return 0
+    if usefulness >= 4:
+        return 3
+    if usefulness == 3:
+        return 2
+    if usefulness == 2 and not set(flags) & SPECIALIST_FLAGS:
+        return 1
+    return 0
+
+
+def entry_tier(e: dict) -> int:
+    return tier(e["usefulness"], e["flags"], eligible(e["usefulness"], e["flags"]))
 
 
 def harmful(rep: dict) -> bool:
@@ -117,6 +144,16 @@ def merged(lang: str, gen_stage: str, repair_stage: str | None) -> dict[int, dic
     return {r: apply_repair(g, rep.get(r)) for r, g in base.items()}
 
 
+def final(lang: str) -> dict[int, dict]:
+    """The entries the seed ships: Haiku's, with Sonnet's repairs for English."""
+    return merged(lang, "haiku", "repair-check" if lang == "en" else None)
+
+
+def games(lang: str) -> dict[int, dict]:
+    """rank → game content; the full stage wins over the pilot for words in both."""
+    return {**batch.load_results(lang, "games-pilot"), **batch.load_results(lang, "games")}
+
+
 def pilot_ranks(words: list[dict]) -> list[int]:
     bands = defaultdict(list)
     for w in words:
@@ -126,7 +163,7 @@ def pilot_ranks(words: list[dict]) -> list[int]:
     return sorted(w["rank"] for b in sorted(bands) for w in rng.sample(bands[b], min(per, len(bands[b]))))
 
 
-def stage_ranks(lang: str, stage: str, words: list[dict]) -> list[int]:
+def stage_ranks(lang: str, stage: str, words: list[dict], cands: dict[int, dict] | None = None) -> list[int]:
     if stage == "pilot":
         # Once run, the pilot words are the ones already done (matched by lemma), so a list
         # rebuild doesn't draw a new sample.
@@ -134,6 +171,9 @@ def stage_ranks(lang: str, stage: str, words: list[dict]) -> list[int]:
         return sorted(done) if done else pilot_ranks(words)
     if stage == "haiku":
         return [w["rank"] for w in words]
+    if STAGES[stage][0] == "games":
+        ranks = stage_ranks(lang, "pilot", words) if stage == "games-pilot" else [w["rank"] for w in words]
+        return [r for r in ranks if r in cands and entry_tier(cands[r]) >= 1]
     gen_stage, prior = REPAIR_SOURCES[stage]
     head = [r for r in batch.load_results(lang, gen_stage) if (r - 1) // BAND_SIZE <= REPAIR_MAX_BAND]
     if prior is None:
@@ -152,10 +192,11 @@ def build_chunks(lang: str, stage: str) -> list[tuple[str, list[int], dict]]:
     batches = batch.load_batches(lang, stage)
     in_flight = {r for b in batches if not b["collected"] for rs in b["requests"].values() for r in rs}
     tried = {r for b in batches if b["collected"] for rs in b["requests"].values() for r in rs}
-    pending = [r for r in stage_ranks(lang, stage, words) if r not in done and r not in in_flight]
+    cands = (merged(lang, *REPAIR_SOURCES[stage]) if kind == "repair"
+             else final(lang) if kind == "games" else None)
+    pending = [r for r in stage_ranks(lang, stage, words, cands) if r not in done and r not in in_flight]
     retry = [r for r in pending if r in tried]
     fresh = [r for r in pending if r not in tried]
-    cands = merged(lang, *REPAIR_SOURCES[stage]) if kind == "repair" else None
     system = prompts.system_prompt(lang, kind)
     schema = prompts.schema(lang, kind)
     n0 = sum(len(b["requests"]) for b in batches)
@@ -181,7 +222,25 @@ def parser(lang: str, kind: str):
                     "definition": {k: v.strip() for k, v in e["definition"].items()},
                     "distractors": {k: [d.strip() for d in v] for k, v in e["distractors"].items()},
                     "example": e["example"].strip(), "model": model}
-        bad = {bd["index"]: {"index": bd["index"], "reason": bd["reason"].strip(),
+        if kind == "games":
+            lemma = e["lemma"].strip().casefold()
+
+            def alts(xs: list[str]) -> list[str]:  # distinct, not the word itself, at most 3
+                out = []
+                for x in (x.strip() for x in xs):
+                    if x and x.casefold() != lemma and x.casefold() not in {o.casefold() for o in out}:
+                        out.append(x)
+                return out[:3]
+            cz, us = e["cloze"], e["usage"]
+            # Like distractors: an extra bank word or wrong usage is dropped, not retried.
+            row = {"rank": e["rank"], "lemma": e["lemma"],
+                   "synonyms": alts(e["synonyms"]), "antonyms": alts(e["antonyms"]),
+                   "cloze": {"sentence": prompts.BLANK.sub("___", cz["sentence"]).strip(),
+                             "answer": cz["answer"].strip(), "bank": [b.strip() for b in cz["bank"][:3]]},
+                   "usage": {"correct": us["correct"].strip(), "wrong": [s.strip() for s in us["wrong"][:3]]},
+                   "model": model}
+            return row if prompts.valid_games(lang, row) else None
+        bad ={bd["index"]: {"index": bd["index"], "reason": bd["reason"].strip(),
                              "replacement": bd["replacement"].strip()} for bd in e["bad_distractors"]}
         row = {"rank": e["rank"], "bad_distractors": sorted(bad.values(), key=lambda b: b["index"]),
                "model": model}
@@ -260,7 +319,8 @@ def cmd_bands(lang: str, pilot: bool) -> None:
 
 
 def cmd_report(lang: str, stage: str) -> None:
-    """Readable dump for hand review. For repair stages: each flagged word, before and after."""
+    """Readable dump for hand review. For repair stages: each flagged word, before and after. For
+    games stages: each word's definition with its synonyms, antonyms, cloze and usage sentences."""
     words = {w["rank"]: w for w in read_lemmas(lang)}
     print(f"[{lang}/{stage}] actual cost: {batch.actual_cost(lang, stage)}")
     path = lang_dir(lang) / f"{stage}_report.md"
@@ -277,6 +337,25 @@ def cmd_report(lang: str, stage: str) -> None:
                     for d in g["distractors"][k]:
                         f.write(f"  - ✗ {d}\n")
                 f.write(f"- example: {g['example']}\n\n")
+        elif kind == "games":
+            src = final(lang)
+            res = batch.load_results(lang, stage)
+            f.write(f"{len(res)} words.\n\n")
+            for rank, g in sorted(res.items()):
+                w, e = words[rank], src.get(rank)
+                cz, us = g["cloze"], g["usage"]
+                f.write(f"## {rank} {w['lemma']} ({w['pos']}, band {w['band']})"
+                        + (f"  tier {entry_tier(e)}" if e else "") + "\n")
+                if e:
+                    f.write(f"- definition: {e['definition'][lang]}\n- example: {e['example']}\n")
+                f.write(f"- synonyms: {', '.join(g['synonyms']) or '—'}\n")
+                f.write(f"- antonyms: {', '.join(g['antonyms']) or '—'}\n")
+                filled = cz["sentence"].replace("___", f"**{cz['answer']}**")
+                f.write(f"- cloze: {filled}\n  - bank: {', '.join(cz['bank'])}\n")
+                f.write(f"- usage:\n  - ✓ {us['correct']}\n")
+                for s in us["wrong"]:
+                    f.write(f"  - ✗ {s}\n")
+                f.write("\n")
         else:
             before = merged(lang, *REPAIR_SOURCES[stage])
             rep = repairs(lang, stage, before)
