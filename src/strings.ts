@@ -3,7 +3,7 @@ import type { AnswerLang, Lang, Verdict } from "../shared/api";
 
 export const LANGUAGE_NAMES: Record<Lang, string> = { en: "English", fr: "Français" };
 
-export const ANSWER_LANG_NAMES: Record<AnswerLang, string> = { en: "English", fr: "French", either: "English or French" };
+export const ANSWER_LANG_NAMES: Record<AnswerLang, string> = { en: "English", fr: "French", either: "Either" };
 
 export const VERDICT_LABELS: Record<Verdict, string> = {
   correct: "Correct",
@@ -13,7 +13,7 @@ export const VERDICT_LABELS: Record<Verdict, string> = {
 
 export const t = {
   appName: "Vocabulary",
-  logOut: "Log out",
+  courses: "Courses",
   loading: "Loading",
   somethingWrong: "Something went wrong. Try again.",
   back: "Back",
@@ -21,28 +21,27 @@ export const t = {
   reload: "Reload",
   offline: "You're offline. Answers need a connection.",
 
-  // Home and course
-  coursesTitle: "Your courses",
-  known: "known",
-  learning: "learning",
-  due: "due for review",
-  estimate: (n: number) => `About ${n.toLocaleString()} words`,
-  notAssessed: "Not assessed yet",
+  // Course
+  known: "Known",
+  learning: "Learning",
+  due: "Due",
+  estimate: (n: number) => `About ${n.toLocaleString()} words known`,
   findLevel: "Find your level",
-  findLevelHint: "About 50 quick questions to estimate your vocabulary and pick where to start.",
+  findLevelHint: "About 50 quick questions estimate your vocabulary and pick where to start.",
   retakeAssessment: "Retake the assessment",
   startFromBeginning: "Start from the most common words",
   learn: "Learn new words",
-  review: (n: number) => (n > 0 ? `Review ${n} due` : "Nothing due for review"),
+  learnFrom: (rank: number) => `From word #${rank.toLocaleString()}`,
+  review: "Review",
+  reviewDue: (n: number) => (n > 0 ? `${n} due` : "Nothing due"),
   words: "Your words",
-  settings: "Settings",
-  startsAt: (rank: number) => `Learning from word #${rank.toLocaleString()}`,
+  wordsCount: (n: number) => n.toLocaleString(),
   noWordsYet: "This language's word list is not loaded yet.",
 
   // Questions
   whatDoesItMean: "What does it mean?",
   typeDefinition: "Type a short definition",
-  answerIn: (lang: string) => `Answer in ${lang}.`,
+  answerIn: (lang: AnswerLang) => (lang === "either" ? "Answer in English or French." : `Answer in ${ANSWER_LANG_NAMES[lang]}.`),
   submit: "Check",
   dontKnow: "I don't know",
   continue: "Continue",
@@ -59,13 +58,13 @@ export const t = {
   assessmentTitle: "Find your level",
   assessmentIntro: [
     "You'll see about 50 words, from very common to rare. Pick the meaning, or type it when asked.",
-    "Press \"I don't know\" rather than guessing: a guess makes the estimate worse, not better.",
+    "Choose \"I don't know\" rather than guessing: a guess makes the estimate worse, not better.",
   ],
   begin: "Begin",
   questionOf: (i: number, n: number) => `${i} of ${n}`,
   resultTitle: "Your result",
   resultSize: (n: number, total: number) => `You know about ${n.toLocaleString()} of the ${total.toLocaleString()} words in this list.`,
-  resultStart: (rank: number) => `Learning will start around word #${rank.toLocaleString()}.`,
+  resultStart: (rank: number) => `Learning starts around word #${rank.toLocaleString()}.`,
   startLearning: "Start learning",
 
   // Study
@@ -89,15 +88,17 @@ export const t = {
   dueOn: (d: string) => `due ${d}`,
 
   // Settings
-  settingsTitle: "Settings",
-  showDefinitionsIn: "Show definitions in",
-  acceptAnswersIn: "Accept typed answers in",
+  settings: "Settings",
+  definitionsIn: "Definitions",
+  answersIn: "Typed answers",
+  frenchHint: "Definitions and multiple-choice options show in this language. Typed answers are accepted in the language chosen below it.",
   englishOnly: "The English course uses English definitions and answers.",
-  saved: "Saved",
+  account: "Account",
+  logOut: "Log out",
+  about: "About",
+  attribution: "Word data: Open English WordNet, Lexique 3, and Wiktionary via kaikki.org (CC BY-SA). Answers are graded by Claude.",
 
   // Auth
   logIn: "Log in",
   register: "Register",
-
-  attribution: "Word data: Open English WordNet, Lexique 3, and Wiktionary via kaikki.org (CC BY-SA).",
 };

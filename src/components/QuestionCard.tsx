@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Answer, AnswerLang, Card } from "../../shared/api";
-import { ANSWER_LANG_NAMES, t } from "../strings";
+import { t } from "../strings";
 
 interface Props {
   card: Card;
@@ -39,53 +39,58 @@ export function QuestionCard({ card, answerLang, busy, label, onAnswer }: Props)
   }
 
   return (
-    <div className="card space-y-5">
+    <div className="question">
       <div>
-        {label && <p className="text-xs font-semibold tracking-wide text-accent uppercase">{label}</p>}
-        <h2 className="mt-1 text-4xl font-semibold tracking-tight break-words">{card.lemma}</h2>
-        <p className="mt-1 text-sm text-muted italic">{card.pos.split(",").join(", ")}</p>
+        {label && <p className="question__label">{label}</p>}
+        <h2 className="lemma">{card.lemma}</h2>
+        <p className="lemma__pos">{card.pos.split(",").join(", ")}</p>
       </div>
 
       {card.kind === "typed" ? (
-        <form className="space-y-3" onSubmit={onSubmit}>
-          <label className="block text-sm text-muted" htmlFor="answer">
-            {t.whatDoesItMean} {t.answerIn(ANSWER_LANG_NAMES[answerLang])}
-          </label>
-          <input
-            id="answer"
-            ref={inputRef}
-            autoComplete="off"
-            placeholder={t.typeDefinition}
-            value={text}
-            disabled={busy}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className="btn btn-primary" disabled={busy || !text.trim()}>
-              {t.submit}
-            </button>
-            <button type="button" className="btn" disabled={busy} onClick={() => onAnswer({ kind: "dontknow" })}>
-              {t.dontKnow}
-            </button>
+        <form className="question__actions" onSubmit={onSubmit}>
+          <div>
+            <div className="group">
+              <input
+                ref={inputRef}
+                className="group__input"
+                aria-label={t.whatDoesItMean}
+                autoComplete="off"
+                autoCapitalize="off"
+                placeholder={t.typeDefinition}
+                value={text}
+                disabled={busy}
+                onChange={(e) => setText(e.target.value)}
+              />
+            </div>
+            <p className="group-hint">{t.answerIn(answerLang)}</p>
           </div>
+          <button type="submit" className="button--primary" disabled={busy || !text.trim()}>
+            {t.submit}
+          </button>
+          <button type="button" className="button--plain" disabled={busy} onClick={() => onAnswer({ kind: "dontknow" })}>
+            {t.dontKnow}
+          </button>
         </form>
       ) : (
-        <div className="space-y-2">
-          <p className="text-sm text-muted">{t.whatDoesItMean}</p>
-          {card.options!.map((option, i) => (
-            <button
-              key={option}
-              type="button"
-              className="btn w-full justify-start text-left font-normal"
-              disabled={busy}
-              onClick={() => onAnswer({ kind: "choice", answer: option })}
-            >
-              <span className="w-4 shrink-0 text-xs text-muted">{i + 1}</span>
-              <span>{option}</span>
-            </button>
-          ))}
-          <button type="button" className="btn w-full justify-start text-muted" disabled={busy} onClick={() => onAnswer({ kind: "dontknow" })}>
-            <span className="w-4 shrink-0 text-xs">0</span>
+        <div className="question__actions">
+          <div>
+            <p className="group-label">{t.whatDoesItMean}</p>
+            <div className="group group--options">
+              {card.options!.map((option, i) => (
+                <button
+                  key={option}
+                  type="button"
+                  className="group__button"
+                  disabled={busy}
+                  onClick={() => onAnswer({ kind: "choice", answer: option })}
+                >
+                  <span className="option__key">{i + 1}</span>
+                  <span className="option__text">{option}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <button type="button" className="button--plain" disabled={busy} onClick={() => onAnswer({ kind: "dontknow" })}>
             {t.dontKnow}
           </button>
         </div>

@@ -6,10 +6,10 @@ import { ApiError } from "../api/client";
 import { courses, status as fetchStatus, study } from "../api/endpoints";
 import { AnswerPanel } from "../components/AnswerPanel";
 import { ChoiceOnlyBanner } from "../components/ChoiceOnlyBanner";
-import { PageHeader } from "../components/PageHeader";
+import { NavBar } from "../components/NavBar";
 import { QuestionCard } from "../components/QuestionCard";
 import { Spinner } from "../components/Spinner";
-import { t } from "../strings";
+import { LANGUAGE_NAMES, t } from "../strings";
 import { useLang } from "../useLang";
 
 interface QueuedCard {
@@ -86,54 +86,43 @@ export default function StudyPage({ mode }: { mode: "learn" | "review" }) {
 
   if (!lang) return <Navigate to="/" replace />;
   const title = mode === "learn" ? t.learnTitle : t.reviewTitle;
-  if (!queue || !course) {
-    return (
-      <>
-        <PageHeader title={title} back={`/${lang}`} />
-        {error ? <p className="text-bad">{error}</p> : <Spinner />}
-      </>
-    );
-  }
-
-  const current = queue[0];
+  const current = queue?.[0];
   const label = current?.retry ? t.again : current?.card.isNew ? t.newWord : undefined;
 
   return (
-    <>
-      <PageHeader title={title} back={`/${lang}`}>
-        {queue.length > 0 && <span className="text-sm text-muted">{queue.length}</span>}
-      </PageHeader>
-      <div className="space-y-4">
-        <ChoiceOnlyBanner status={status} />
-        {error && <p className="text-bad">{error}</p>}
+    <div className="page">
+      <NavBar
+        back={{ to: `/${lang}`, label: LANGUAGE_NAMES[lang] }}
+        end={queue && queue.length > 0 && <span>{queue.length}</span>}
+      />
+      <ChoiceOnlyBanner status={status} />
+      {error && <p className="error">{error}</p>}
 
-        {answered ? (
-          <AnswerPanel lemma={answered.item.card.lemma} result={answered.result} onContinue={onContinue} />
-        ) : current ? (
-          <QuestionCard card={current.card} answerLang={course.answerLang} busy={busy} label={label} onAnswer={(a) => void onAnswer(a)} />
-        ) : (
-          <div className="card space-y-3">
-            {tally.total > 0 ? (
-              <>
-                <h2 className="text-xl font-semibold">{t.sessionDone}</h2>
-                <p>{t.sessionSummary(tally.right, tally.total)}</p>
-              </>
-            ) : (
-              <p>{mode === "learn" ? t.nothingToLearn : t.nothingToReview}</p>
+      {!queue || !course ? (
+        <>
+          <h1 className="large-title">{title}</h1>
+          {!error && <Spinner />}
+        </>
+      ) : answered ? (
+        <AnswerPanel lemma={answered.item.card.lemma} result={answered.result} onContinue={onContinue} />
+      ) : current ? (
+        <QuestionCard card={current.card} answerLang={course.answerLang} busy={busy} label={label} onAnswer={(a) => void onAnswer(a)} />
+      ) : (
+        <div className="question">
+          <h1 className="large-title">{tally.total > 0 ? t.sessionDone : title}</h1>
+          <p>{tally.total > 0 ? t.sessionSummary(tally.right, tally.total) : mode === "learn" ? t.nothingToLearn : t.nothingToReview}</p>
+          <div className="question__actions">
+            {mode === "learn" && tally.total > 0 && (
+              <button type="button" className="button--primary" onClick={() => void load()}>
+                {t.moreWords}
+              </button>
             )}
-            <div className="flex flex-wrap gap-2">
-              {mode === "learn" && tally.total > 0 && (
-                <button type="button" className="btn btn-primary" onClick={() => void load()}>
-                  {t.moreWords}
-                </button>
-              )}
-              <Link to={`/${lang}`} className="btn">
-                {t.back}
-              </Link>
-            </div>
+            <Link to={`/${lang}`} className="button-link button--plain">
+              {t.back}
+            </Link>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }

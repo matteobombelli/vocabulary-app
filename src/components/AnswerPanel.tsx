@@ -2,49 +2,49 @@ import { useEffect, useRef } from "react";
 import type { AnswerResult } from "../../shared/api";
 import { VERDICT_LABELS, t } from "../strings";
 
-const VERDICT_STYLES = {
-  correct: "bg-good-soft text-good",
-  partial: "bg-warn-soft text-warn",
-  incorrect: "bg-bad-soft text-bad",
-};
-
 /** Shown after every answer, whatever the verdict: the verdict, feedback, definitions, example. */
 export function AnswerPanel({ lemma, result, onContinue }: { lemma: string; result: AnswerResult; onContinue(): void }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => buttonRef.current?.focus(), [result]);
 
   return (
-    <div className="card space-y-4">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <h2 className="text-3xl font-semibold tracking-tight break-words">{lemma}</h2>
-        <span className={`rounded-full px-3 py-0.5 text-sm font-medium ${VERDICT_STYLES[result.verdict]}`}>
-          {VERDICT_LABELS[result.verdict]}
-        </span>
+    <div className="question">
+      <div className="verdict">
+        <h2 className="lemma">{lemma}</h2>
+        <span className={`badge badge--${result.verdict}`}>{VERDICT_LABELS[result.verdict]}</span>
       </div>
       {result.feedback && <p>{result.feedback}</p>}
+
       <section>
-        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">{t.definition}</h3>
-        <p className="mt-1 text-lg">{result.definition}</p>
+        <h3 className="group-label">{t.definition}</h3>
+        <div className="group">
+          <p className="group__row--block">{result.definition}</p>
+        </div>
       </section>
       {result.glosses.length > 0 && (
         <section>
-          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">{t.dictionary}</h3>
-          <ol className="mt-1 list-decimal space-y-1 pl-5">
-            {result.glosses.map((g) => (
-              <li key={g}>{g}</li>
-            ))}
-          </ol>
+          <h3 className="group-label">{t.dictionary}</h3>
+          <div className="group">
+            <ol className="glosses group__row--block">
+              {result.glosses.map((g) => (
+                <li key={g}>{g}</li>
+              ))}
+            </ol>
+          </div>
         </section>
       )}
       {result.example && (
         <section>
-          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">{t.example}</h3>
-          <p className="mt-1 italic">{result.example}</p>
+          <h3 className="group-label">{t.example}</h3>
+          <div className="group">
+            <p className="example group__row--block">{result.example}</p>
+          </div>
         </section>
       )}
-      {/* Pinned to the bottom of the screen, so long definitions never push it out of reach on a phone. */}
-      <div className="sticky bottom-0 -mx-5 -mb-5 rounded-b-xl bg-surface px-5 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-        <button ref={buttonRef} type="button" className="btn btn-primary w-full sm:w-auto" onClick={onContinue}>
+
+      {/* Kept within reach on a phone, however long the definitions above it. */}
+      <div className="sticky-action">
+        <button ref={buttonRef} type="button" className="button--primary button--wide" onClick={onContinue}>
           {t.continue}
         </button>
       </div>

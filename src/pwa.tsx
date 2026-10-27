@@ -57,12 +57,9 @@ export function UpdateToast() {
 
   if (!waiting) return null;
   return (
-    <div
-      className="fixed inset-x-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] mx-auto flex max-w-sm items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm shadow-lg"
-      role="status"
-    >
+    <div className="toast" role="status">
       {t.newVersion}
-      <button type="button" className="btn btn-primary py-1.5" onClick={() => waiting.postMessage({ type: "SKIP_WAITING" })}>
+      <button type="button" className="button--primary" onClick={() => waiting.postMessage({ type: "SKIP_WAITING" })}>
         {t.reload}
       </button>
     </div>

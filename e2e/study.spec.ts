@@ -29,15 +29,16 @@ test("learn: a missed word comes back a few cards later", async ({ page, loggedI
 
   await page.goto("en/words");
   await expect(page.getByText(seen[0], { exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Learning" }).click();
+  await page.getByRole("radio", { name: "Learning" }).click();
   await expect(page.getByText(missed, { exact: true })).toBeVisible();
 });
 
 test("settings: French definitions can be shown in English", async ({ page, loggedIn }) => {
   void loggedIn;
-  await page.goto("fr/settings");
-  await page.getByText("English", { exact: true }).first().click();
-  await expect(page.getByText("Saved")).toBeVisible();
+  await page.goto("settings");
+  const english = page.getByRole("radiogroup", { name: "Definitions" }).getByRole("radio", { name: "English" });
+  await english.click();
+  await expect(english).toHaveAttribute("aria-checked", "true");
 
   await page.goto("fr");
   await page.getByRole("button", { name: "Start from the most common words" }).click();

@@ -30,45 +30,50 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex justify-center pt-8">
-      <form className="card w-full max-w-sm space-y-3" onSubmit={onSubmit}>
-        <h1 className="text-xl font-semibold">Register</h1>
-        <input
-          type="email"
-          placeholder="Email"
-          aria-label="Email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password (8+ characters)"
-          aria-label="Password"
-          autoComplete="new-password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Invite code"
-          aria-label="Invite code"
-          required
-          value={inviteCode}
-          onChange={(e) => setInviteCode(e.target.value)}
-        />
-        {error && <p className="text-sm text-bad">{error}</p>}
-        <button type="submit" className="btn btn-primary w-full" disabled={busy}>
+    <main className="page--centre">
+      <form className="card--auth" onSubmit={onSubmit}>
+        <h1>Register</h1>
+        <div className="group">
+          <input
+            className="group__input"
+            type="email"
+            placeholder="Email"
+            aria-label="Email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className="group__input"
+            type="password"
+            placeholder="Password (8+ characters)"
+            aria-label="Password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <input
+            className="group__input"
+            type="text"
+            placeholder="Invite code"
+            aria-label="Invite code"
+            required
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+          />
+        </div>
+        {error && <p className="error">{error}</p>}
+        <button type="submit" className="button--primary" disabled={busy}>
           {busy ? "Registering…" : "Register"}
         </button>
-        <p className="text-sm text-muted">
+        <p className="muted">
           Already have an account? <Link to="/login">Log in</Link>
         </p>
       </form>
-    </div>
+    </main>
   );
 }
 

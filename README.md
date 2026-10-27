@@ -12,12 +12,16 @@ Vocabulary trainer at https://apps.matteob.dev/projects/vocabulary-app, with Eng
 - **French**: each user picks whether definitions are shown in French or English, and which
   language typed answers may be in (Settings on the French course).
 
+The UI follows todo.matteob.dev's design system (`src/styles.css` ports its tokens and components):
+Apple's system colours and font, grouped cells, a tab bar on phones, a header on tablets and a
+sidebar from 960px.
+
 Installable as a PWA on phones and desktops ("Add to Home Screen"): a service worker caches the
 app shell, so the app opens instantly and says when it is offline; answers always need the network.
 A "New version available" toast offers a reload after each deploy. Icons come from
 `scripts/generate-icons.mjs` (`npm run icons`).
 
-Built with **Vite + React + Tailwind + TypeScript**, deployed as one Cloudflare Worker with static
+Built with **Vite + React + TypeScript**, deployed as one Cloudflare Worker with static
 assets and a **D1** database (`vocabulary-app`). The word lists come from the offline pipeline in
 `pipeline/`.
 

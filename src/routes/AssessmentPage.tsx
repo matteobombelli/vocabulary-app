@@ -5,10 +5,10 @@ import { ApiError } from "../api/client";
 import { assessment, courses, status as fetchStatus } from "../api/endpoints";
 import { AnswerPanel } from "../components/AnswerPanel";
 import { ChoiceOnlyBanner } from "../components/ChoiceOnlyBanner";
-import { PageHeader } from "../components/PageHeader";
+import { NavBar } from "../components/NavBar";
 import { QuestionCard } from "../components/QuestionCard";
 import { Spinner } from "../components/Spinner";
-import { t } from "../strings";
+import { LANGUAGE_NAMES, t } from "../strings";
 import { useLang } from "../useLang";
 
 type Phase =
@@ -68,55 +68,59 @@ export default function AssessmentPage() {
   }
 
   if (!lang) return <Navigate to="/" replace />;
-  if (!course) return error ? <p className="text-bad">{error}</p> : <Spinner />;
-
   const current = phase.kind === "question" || phase.kind === "answered" ? phase.step : null;
 
   return (
-    <>
-      <PageHeader title={t.assessmentTitle} back={`/${lang}`}>
-        {current && <span className="text-sm text-muted">{t.questionOf(current.index + 1, current.total)}</span>}
-      </PageHeader>
+    <div className="page">
+      <NavBar
+        back={{ to: `/${lang}`, label: LANGUAGE_NAMES[lang] }}
+        end={current && <span>{t.questionOf(current.index + 1, current.total)}</span>}
+      />
+      {phase.kind === "intro" && <h1 className="large-title">{t.assessmentTitle}</h1>}
       {current && (
-        <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-line">
-          <div className="h-full bg-accent transition-all" style={{ width: `${(current.index / current.total) * 100}%` }} />
+        <div className="progress" role="progressbar" aria-valuenow={current.index} aria-valuemax={current.total}>
+          <div className="progress__bar" style={{ width: `${(current.index / current.total) * 100}%` }} />
         </div>
       )}
-      <div className="space-y-4">
-        <ChoiceOnlyBanner status={status} />
-        {error && <p className="text-bad">{error}</p>}
+      <ChoiceOnlyBanner status={status} />
+      {error && <p className="error">{error}</p>}
 
-        {phase.kind === "intro" && (
-          <div className="card space-y-3">
-            {t.assessmentIntro.map((p) => (
-              <p key={p}>{p}</p>
-            ))}
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void begin()}>
-              {t.begin}
-            </button>
-          </div>
-        )}
-
-        {phase.kind === "question" && (
-          <QuestionCard card={phase.step.card} answerLang={course.answerLang} busy={busy} onAnswer={(a) => void onAnswer(a)} />
-        )}
-
-        {phase.kind === "answered" && <AnswerPanel lemma={phase.step.card.lemma} result={phase.result} onContinue={onContinue} />}
-
-        {phase.kind === "outcome" && (
-          <div className="card space-y-3">
-            <h2 className="text-xl font-semibold">{t.resultTitle}</h2>
-            <p className="text-lg">{t.resultSize(phase.outcome.estSize, phase.outcome.totalWords)}</p>
-            <div className="h-2 overflow-hidden rounded-full bg-line">
-              <div className="h-full bg-accent" style={{ width: `${(phase.outcome.estSize / phase.outcome.totalWords) * 100}%` }} />
+      {!course ? (
+        !error && <Spinner />
+      ) : (
+        <>
+          {phase.kind === "intro" && (
+            <div className="question__actions">
+              {t.assessmentIntro.map((p) => (
+                <p key={p}>{p}</p>
+              ))}
+              <button type="button" className="button--primary" disabled={busy} onClick={() => void begin()}>
+                {t.begin}
+              </button>
             </div>
-            <p className="text-muted">{t.resultStart(phase.outcome.startRank)}</p>
-            <Link to={`/${lang}/learn`} className="btn btn-primary">
-              {t.startLearning}
-            </Link>
-          </div>
-        )}
-      </div>
-    </>
+          )}
+
+          {phase.kind === "question" && (
+            <QuestionCard card={phase.step.card} answerLang={course.answerLang} busy={busy} onAnswer={(a) => void onAnswer(a)} />
+          )}
+
+          {phase.kind === "answered" && <AnswerPanel lemma={phase.step.card.lemma} result={phase.result} onContinue={onContinue} />}
+
+          {phase.kind === "outcome" && (
+            <div className="question">
+              <h1 className="large-title">{t.resultTitle}</h1>
+              <p>{t.resultSize(phase.outcome.estSize, phase.outcome.totalWords)}</p>
+              <div className="progress">
+                <div className="progress__bar" style={{ width: `${(phase.outcome.estSize / phase.outcome.totalWords) * 100}%` }} />
+              </div>
+              <p className="muted">{t.resultStart(phase.outcome.startRank)}</p>
+              <Link to={`/${lang}/learn`} className="button-link button--primary">
+                {t.startLearning}
+              </Link>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

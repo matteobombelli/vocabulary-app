@@ -11,7 +11,7 @@ test("serves an installable manifest and a service worker that caches the app sh
   });
 
   await page.goto("");
-  await expect(page.getByRole("heading", { name: "Your courses" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "English", level: 1 })).toBeVisible();
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
   expect(scope).toMatch(/\/projects\/vocabulary-app\/$/);
   // Workbox keys non-hashed files with a revision query string.

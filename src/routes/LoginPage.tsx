@@ -29,36 +29,40 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex justify-center pt-8">
-      <form className="card w-full max-w-sm space-y-3" onSubmit={onSubmit}>
-        <h1 className="text-xl font-semibold">Log in</h1>
-        <input
-          type="email"
-          placeholder="Email"
-          aria-label="Email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          aria-label="Password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p className="text-sm text-bad">{error}</p>}
-        <button type="submit" className="btn btn-primary w-full" disabled={busy}>
+    <main className="page--centre">
+      <form className="card--auth" onSubmit={onSubmit}>
+        <h1>Log in</h1>
+        <div className="group">
+          <input
+            className="group__input"
+            type="email"
+            placeholder="Email"
+            aria-label="Email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className="group__input"
+            type="password"
+            placeholder="Password"
+            aria-label="Password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {error && <p className="error">{error}</p>}
+        <button type="submit" className="button--primary" disabled={busy}>
           {busy ? "Logging in…" : "Log in"}
         </button>
-        <p className="text-sm text-muted">
+        <p className="muted">
           No account? <Link to="/register">Register</Link>
         </p>
       </form>
-    </div>
+    </main>
   );
 }
 
