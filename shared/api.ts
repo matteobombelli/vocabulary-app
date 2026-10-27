@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-export const APP_BASE = "/projects/vocabulary-app";
-export const API_PREFIX = `${APP_BASE}/api`;
+export const API_PREFIX = "/api";
 
 export const LANGS = ["en", "fr"] as const;
 export const Lang = z.enum(LANGS);

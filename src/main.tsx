@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Navigate, createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
-import { APP_BASE } from "../shared/api";
 import App from "./App";
 import { RequireAuth } from "./auth/RequireAuth";
 import { lastCourse } from "./lastCourse";
@@ -44,8 +43,7 @@ const router = createBrowserRouter(
         },
       ],
     },
-  ],
-  { basename: APP_BASE }
+  ]
 );
 
 createRoot(document.getElementById("root")!).render(

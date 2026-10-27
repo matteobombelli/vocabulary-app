@@ -1,4 +1,4 @@
-import { APP_BASE, type User } from "../../shared/api";
+import type { User } from "../../shared/api";
 import { now, readCookie } from "../http";
 import { HttpError, type Ctx } from "../router";
 
@@ -20,7 +20,7 @@ export async function hashToken(token: string): Promise<string> {
 }
 
 function appendSessionCookie(c: Ctx, token: string, maxAgeSeconds: number): void {
-  let cookie = `${SESSION_COOKIE}=${token}; Path=${APP_BASE}; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+  let cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
   if (c.url.protocol === "https:") cookie += "; Secure";
   c.responseHeaders.append("Set-Cookie", cookie);
 }

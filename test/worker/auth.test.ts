@@ -38,7 +38,7 @@ describe("POST /auth/register", () => {
     expect(cookie).toMatch(/^vocab_session=[A-Za-z0-9_-]{43}; /);
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Lax");
-    expect(cookie).toContain("Path=/projects/vocabulary-app");
+    expect(cookie).toContain("Path=/");
     expect(cookie).toContain("Secure");
     expect(cookie).toContain("Max-Age=2592000");
   });
@@ -195,7 +195,7 @@ describe("POST /auth/logout", () => {
     expect(cookies).toHaveLength(1);
     expect(cookies[0]).toMatch(/^vocab_session=; /);
     expect(cookies[0]).toContain("Max-Age=0");
-    expect(cookies[0]).toContain("Path=/projects/vocabulary-app");
+    expect(cookies[0]).toContain("Path=/");
     expect(cookies[0]).toContain("HttpOnly");
 
     const me = await request("/auth/me", { headers: cookieHeader(cookie) });
