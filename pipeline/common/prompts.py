@@ -1,6 +1,9 @@
-"""Prompts and structured-output schemas for enrichment (generation) and Sonnet review."""
+"""Prompts and structured-output schemas for enrichment (generation), Sonnet review and the
+practice-game content."""
 
 import json
+import re
+import unicodedata
 
 FLAGS = ["jargon", "archaic", "offensive", "technical"]
 # Definition languages each course offers. The French course lets the user pick either.
@@ -109,6 +112,35 @@ For each problem, say what is wrong in a few words and write the fix:
   (8-20 words, containing the word itself in the defined sense)."""
 
 
+GAMES_TASK = """\
+Each word comes with its definition (the one sense the app teaches) and an example sentence
+already shown to learners. Write practice-game content for that defined sense only, all in
+{lang_name}:
+
+- synonyms: 0 to 3 single words or short phrases (at most 3 words) a learner would accept as
+  meaning the same thing in the defined sense. Prefer common words over rare ones. Leave empty
+  when there is no real synonym; never pad with loose associations.
+- antonyms: 0 to 3 true opposites in the defined sense. Most words have none (concrete nouns
+  almost never do); leave it empty rather than forcing one.
+- cloze: a natural sentence of 8-20 words containing ___ exactly once, where the word, in the
+  inflected form given as answer, is the only reasonable fit for the blank. The sentence must
+  differ from the example. answer is exactly what fills the blank (the word itself or an
+  inflection of it, not a derivative). bank: exactly 3 other words of the same part of speech
+  and similar difficulty, inflected the same way, that clearly do NOT fit the blank, so only
+  the answer makes sense.
+- usage: correct is one sentence that uses the word correctly in the defined sense. wrong is
+  exactly 3 grammatical sentences that MISUSE the word, each in a way a learner who half-knows
+  it could fall for: a wrong meaning, confusion with a similar-looking or similar-sounding word,
+  a wrong collocation or construction, or the wrong part of speech. Each wrong sentence must be
+  clearly wrong to someone who knows the word, not merely unusual. Every usage sentence
+  contains the word itself, written as the lemma or as the cloze answer, or as a regular
+  inflection of the lemma (not an irregular form such as went or va). All four differ from the
+  example and the cloze sentence.
+
+Sentences are 8-20 words, natural, and suitable for adult learners. Use your own knowledge of
+{lang_name}; the glosses are only a hint."""
+
+
 def system_prompt(lang: str, kind: str) -> str:
     head = (f"You are writing the word list for a {LANG_NAME[lang]} vocabulary-learning app. "
             f"{LEARNERS[lang]}\n\n")
@@ -116,25 +148,30 @@ def system_prompt(lang: str, kind: str) -> str:
         return head + RUBRIC + "\n\n" + GEN_TASK.format(def_rule=DEF_RULE[lang], lang_name=LANG_NAME[lang], source=SOURCE[lang])
     if kind == "repair":
         return head + REPAIR_TASK
+    if kind == "games":
+        return head + GAMES_TASK.format(lang_name=LANG_NAME[lang])
     return head + RUBRIC + "\n\n" + REVIEW_TASK
 
 
-def word_input(lang: str, w: dict, candidate: dict | None = None) -> dict:
+def word_input(lang: str, w: dict, candidate: dict | None = None, kind: str = "") -> dict:
     x = {"rank": w["rank"], "lemma": w["lemma"], "pos": w["pos"]}
     for k in ("en", "fr"):
         if w["glosses"].get(k):
             x[f"glosses_{k}"] = w["glosses"][k]
-    if candidate and w.get("all_glosses"):  # repair checks distractors against every sense
+    if kind == "repair" and w.get("all_glosses"):  # repair checks distractors against every sense
         x["glosses_en"] = w["all_glosses"]
     if w.get("also_proper"):
         x["also_proper_noun"] = True
-    if candidate:
+    if kind == "games":  # the sense to practise, in the word's own language
+        x["definition"] = candidate["definition"][lang]
+        x["example"] = candidate["example"]
+    elif candidate:
         x["candidate"] = {k: candidate[k] for k in ("definition", "distractors", "example")}
     return x
 
 
 def user_prompt(lang: str, words: list[dict], kind: str, candidates: dict[int, dict] | None = None) -> str:
-    lines = [json.dumps(word_input(lang, w, candidates[w["rank"]] if candidates else None), ensure_ascii=False)
+    lines = [json.dumps(word_input(lang, w, candidates[w["rank"]] if candidates else None, kind), ensure_ascii=False)
              for w in words]
     return (f"{len(words)} words, one JSON object per line (rank: position in the frequency list, "
             f"1 = most frequent). Return exactly one entry per word, in the same order, copying rank "
@@ -172,6 +209,16 @@ def schema(lang: str, kind: str) -> dict:
             "example_problem": {"type": "string"},
             "example_fix": {"type": "string"},
         })
+    elif kind == "games":
+        words = {"type": "array", "items": {"type": "string"}}
+        item = _obj({
+            "rank": {"type": "integer"},
+            "lemma": {"type": "string"},
+            "synonyms": words,
+            "antonyms": words,
+            "cloze": _obj({"sentence": {"type": "string"}, "answer": {"type": "string"}, "bank": words}),
+            "usage": _obj({"correct": {"type": "string"}, "wrong": words}),
+        })
     elif kind == "gen":
         item = _obj({
             **common,
@@ -199,3 +246,36 @@ def valid_gen(lang: str, e: dict) -> bool:
         if len(ds) != 3 or not all(d.strip() for d in ds):
             return False
     return bool(e["example"].strip())
+
+
+BLANK = re.compile(r"_{3,}")
+
+
+def _fold(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", s.casefold()) if not unicodedata.combining(c))
+
+
+def contains_word(lemma: str, sentence: str, forms: tuple[str, ...] = ()) -> bool:
+    """The sentence has the lemma or an inflection of it: its stem (the lemma minus up to 2 final
+    letters, so try → tried, venir → venons) or one of the given forms, ignoring case and accents.
+    Irregular forms the stem misses (went, va) pass only if given in forms."""
+    s = _fold(sentence)
+    stem = _fold(lemma)[:max(2, len(lemma) - 2)]
+    return stem in s or any(f.strip() and _fold(f) in s for f in forms)
+
+
+def valid_games(lang: str, e: dict) -> bool:
+    """Checks structured outputs cannot express: one blank, an answer, 3 bank words and 3 wrong
+    usages, and the word itself in every usage sentence (the cloze answer counts as one of its
+    forms)."""
+    cz, us = e["cloze"], e["usage"]
+    answer = cz["answer"].strip()
+    if len(BLANK.findall(cz["sentence"])) != 1 or not answer:
+        return False
+    bank = [b.strip() for b in cz["bank"]]
+    if len(bank) != 3 or not all(bank) or _fold(answer) in {_fold(b) for b in bank}:
+        return False
+    sentences = [us["correct"], *us["wrong"]]
+    if len(us["wrong"]) != 3 or len({_fold(s.strip()) for s in sentences}) != 4:
+        return False
+    return all(contains_word(e["lemma"], s, (answer,)) for s in sentences)

@@ -6,7 +6,8 @@ writes lives in `pipeline/data/` (gitignored).
 
 ```
 en.py  fr.py     adapters: frequency list → lemmas → glosses → drop rules → data/<lang>/lemmas.jsonl
-enrich.py        Haiku pass, Sonnet review-and-repair of EN bands 0-8 (Batch API, structured outputs)
+enrich.py        Haiku pass, Sonnet review-and-repair of EN bands 0-8, Haiku game content
+                 (Batch API, structured outputs)
 seed.py          data/seed/<lang>-NNN.sql chunks + data/seed/<lang>-words.jsonl.gz
 common/          paths, filter stages and bands, prompts and schemas, batch plumbing
 ```
@@ -166,7 +167,53 @@ $E collect en repair-check --wait
 $E bands en                       # → data/en/bands.json
 ```
 
+### Tiers and game content
+
+Each word gets a **tier**, which decides which learners see it (`tier()` in `enrich.py`):
+
+| tier | rule | shown to |
+|---|---|---|
+| 3 | usefulness ≥ 4 | beginner, intermediate, fluent, native |
+| 2 | usefulness 3 | intermediate, fluent, native |
+| 1 | usefulness 2, not flagged technical or jargon | fluent, native |
+| 0 | anything else, or not eligible | nobody |
+
+Teachable words (tier ≥ 1) then get content for the practice games, written by Haiku
+(`claude-haiku-5-5`, effort low) in the word's own language for the sense of the final definition
+(Haiku's entry with Sonnet's repairs for English), with the shipped example sentence as context:
+- `synonyms`: 0–3 words or short phrases that mean the same in that sense; `antonyms`: 0–3 true
+  opposites (usually none for concrete nouns).
+- `cloze`: a sentence with `___` once, the `answer` that fills it (the word or an inflection),
+  and a `bank` of 3 same-POS words that don't fit.
+- `usage`: one `correct` sentence and 3 `wrong` ones that misuse the word in ways that could
+  fool a learner who half-knows it.
+
+`collect` rejects an entry unless the cloze has exactly one blank, the answer is non-empty and not
+in the bank, the bank and the wrong usages number 3, and every usage sentence contains the word:
+its stem (the lemma minus up to 2 final letters) or the cloze answer, ignoring case and accents.
+Irregular forms (went, va) fail that check, so the prompt asks for regular forms; rejected words
+go back in the next `submit`. Extra bank words or wrong usages are trimmed to 3, and synonyms
+or antonyms equal to the word are dropped.
+
+```bash
+$E estimate en games-pilot        # the teachable pilot words (also: fr)
+$E submit en games-pilot
+$E collect en games-pilot --wait
+$E report en games-pilot          # → data/en/games-pilot_report.md for hand review
+$E submit en games                # every teachable word (and: $E submit fr games)
+$E collect en games --wait
+```
+
+Estimates before any games batch was collected (output at the default guess of 350 tokens/word
+for English and 450 for French): games-pilot ≈ $0.02 (en, 159 words) and $0.03 (fr, 232 words);
+games ≈ $3.84 (en, 40,580 words) and $3.50 (fr, 28,536 words).
+
 ## 4. Seed
+
+The seed carries `games` (JSON `{"synonyms", "antonyms", "cloze": {"sentence", "answer", "bank"},
+"usage": {"correct", "wrong"}}` from the games stage, falling back to games-pilot, or `{}` for a
+word without game content) and `tier`, so it needs `migrations/0003_lifecycle.sql` applied first.
+Missing game content never blocks the seed.
 
 ```bash
 .venv/bin/python -I seed.py en
@@ -194,4 +241,4 @@ enrichment again.
 
 The seed contains Wiktionary and Lexique text, so the seed and the release JSONL are CC BY-SA 4.0
 and need attribution to Wiktionary contributors, Lexique, Open English WordNet and wordfreq (the app footer
-carries it). Definitions, distractors and examples are written by Claude.
+carries it). Definitions, distractors, examples and game content are written by Claude.
