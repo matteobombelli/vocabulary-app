@@ -126,16 +126,27 @@ already shown to learners. Write practice-game content for that defined sense on
   inflected form given as answer, is the only reasonable fit for the blank. The sentence must
   differ from the example. answer is exactly what fills the blank (the word itself or an
   inflection of it, not a derivative). bank: exactly 3 other words of the same part of speech
-  and similar difficulty, inflected the same way, that clearly do NOT fit the blank, so only
-  the answer makes sense.
+  and similar difficulty, inflected the same way (and agreeing in gender where it shows), that
+  make the sentence false or absurd. Test each bank word by putting it in the blank: if the
+  sentence could still be true, even loosely or in some other situation, replace it. Close
+  relatives of the answer almost always fit (trolley for pram, ferry for speedboat, badger for
+  razorback, listened for rewound), so pick words the sentence's details rule out.
 - usage: correct is one sentence that uses the word correctly in the defined sense. wrong is
-  exactly 3 grammatical sentences that MISUSE the word, each in a way a learner who half-knows
-  it could fall for: a wrong meaning, confusion with a similar-looking or similar-sounding word,
-  a wrong collocation or construction, or the wrong part of speech. Each wrong sentence must be
-  clearly wrong to someone who knows the word, not merely unusual. Every usage sentence
-  contains the word itself, written as the lemma or as the cloze answer, or as a regular
-  inflection of the lemma (not an irregular form such as went or va). All four differ from the
-  example and the cloze sentence.
+  exactly 3 sentences that MISUSE the word in ways a learner who half-knows it would actually
+  produce, each a different kind of mistake from this list:
+  (a) confusing it with a similar-looking or similar-sounding word, or a related word from the
+      same family (disinterested for uninterested, affect for effect);
+  (b) a wrong collocation, preposition or construction (depend of, discuss about);
+  (c) the wrong part of speech, or a nearby but wrong shade of meaning (using it where a
+      related word with a different nuance belongs).
+  Each wrong sentence keeps a realistic topic where the word could appear, so the learner has to
+  know the word to spot the mistake; never write a sentence that is just absurd (a monkey
+  swimming an ocean, a pram with an engine) or that contradicts itself. A wrong sentence must not
+  be correct in ANY sense of the word, including senses other than the defined one: for fire,
+  "the coach fired his striker" and "she fired a pistol" are correct English, so they cannot be
+  wrong options. Every usage sentence contains the word itself, written as the lemma or as the
+  cloze answer, or as a regular inflection of the lemma (not an irregular form such as went or
+  va). All four differ from the example and the cloze sentence.
 
 Sentences are 8-20 words, natural, and suitable for adult learners. Use your own knowledge of
 {lang_name}; the glosses are only a hint."""

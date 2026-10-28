@@ -56,8 +56,8 @@ STAGES = {
     "haiku": ("gen", HAIKU, "low"),
     "repair": ("repair", SONNET, "medium"),
     "repair-check": ("repair", SONNET, "medium"),
-    "games-pilot": ("games", HAIKU, "low"),
-    "games": ("games", HAIKU, "low"),
+    "games-pilot": ("games", HAIKU, "high"),
+    "games": ("games", HAIKU, "high"),
 }
 # For each repair stage: (stage whose entries it checks, repair stage whose fixes it applies first).
 REPAIR_SOURCES = {
@@ -66,7 +66,7 @@ REPAIR_SOURCES = {
     "repair": ("haiku", None),
     "repair-check": ("haiku", "repair"),
 }
-CHUNK, RETRY_CHUNK = 50, 10
+CHUNK, RETRY_CHUNK, GAMES_CHUNK = 50, 10, 8
 PILOT_SIZE = 300
 REPAIR_MAX_BAND = 8  # ranks 1-22,500
 USEFULNESS_CUTOFF = 2
@@ -201,7 +201,9 @@ def build_chunks(lang: str, stage: str) -> list[tuple[str, list[int], dict]]:
     schema = prompts.schema(lang, kind)
     n0 = sum(len(b["requests"]) for b in batches)
     chunks = []
-    for ranks, size in ((fresh, CHUNK), (retry, RETRY_CHUNK)):
+    # Games run at high effort, ~3.5K output tokens a word with thinking: small requests stay under MAX_TOKENS.
+    sizes = (GAMES_CHUNK, GAMES_CHUNK // 2) if kind == "games" else (CHUNK, RETRY_CHUNK)
+    for ranks, size in zip((fresh, retry), sizes):
         for i in range(0, len(ranks), size):
             part = ranks[i:i + size]
             user = prompts.user_prompt(lang, [by_rank[r] for r in part], kind, cands)
