@@ -84,33 +84,35 @@ def valid_outputs(lang: str) -> dict[str, dict]:
     return out
 
 
-def cmd_todo(lang: str, limit: int, chunk: int) -> None:
-    words = read_jsonl(input_path(lang))[:limit]
+def cmd_todo(lang: str, start: int, limit: int, chunk: int) -> None:
+    words = read_jsonl(input_path(lang))[start:start + limit]
     done = valid_outputs(lang)
     pending = [w for w in words if w["lemma"] not in done]
     todo = CLOUD / "todo"
-    todo.mkdir(exist_ok=True)
-    for old in todo.glob(f"{lang}-*.jsonl"):
+    todo.mkdir(parents=True, exist_ok=True)
+    for old in todo.glob(f"{lang}-s{start}-*.jsonl"):
         old.unlink()
-    # Chunk names never repeat, so a retry's output file doesn't overwrite an earlier one.
+    # Chunk names never repeat, across retries and across sessions working other ranges, so no
+    # output file overwrites another.
     out_dir = CLOUD / "out" / lang
-    run = 1 + max((int(p.stem.split("-")[1][1:]) for p in out_dir.glob(f"{lang}-r*.jsonl")), default=0)
+    prefix = f"{lang}-s{start}-r"
+    run = 1 + max((int(p.stem[len(prefix):].split("-")[0]) for p in out_dir.glob(f"{prefix}*.jsonl")), default=0)
     for i in range(0, len(pending), chunk):
-        with (todo / f"{lang}-r{run}-{i // chunk:04d}.jsonl").open("w", encoding="utf-8") as f:
+        with (todo / f"{prefix}{run}-{i // chunk:04d}.jsonl").open("w", encoding="utf-8") as f:
             for w in pending[i:i + chunk]:
                 f.write(json.dumps({k: v for k, v in w.items() if k != "tier"}, ensure_ascii=False) + "\n")
     n = -(-len(pending) // chunk)
     print(f"[{lang}] {len(words) - len(pending):,}/{len(words):,} done; {len(pending):,} pending in {n} chunks under {todo}")
 
 
-def cmd_check(lang: str, limit: int | None) -> None:
-    words = read_jsonl(input_path(lang))
+def cmd_check(lang: str, start: int, limit: int | None) -> None:
+    words = read_jsonl(input_path(lang))[start:]
     if limit:
         words = words[:limit]
     done = valid_outputs(lang)
     ok = [w for w in words if w["lemma"] in done]
     print(f"[{lang}] {len(ok):,}/{len(words):,} words have valid games")
-    path = CLOUD / f"{lang}-report.md"
+    path = CLOUD / f"{lang}-s{start}-report.md"
     with path.open("w", encoding="utf-8") as f:
         f.write(f"# {lang} cloud games\n\n{len(ok):,} of {len(words):,} words.\n\n")
         for w in ok:
@@ -141,7 +143,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["export", "todo", "check", "import"])
     ap.add_argument("lang", choices=["en", "fr"])
-    ap.add_argument("--limit", type=int, help="only the first N input words (todo: required)")
+    ap.add_argument("--start", type=int, default=0, help="skip the first N input words")
+    ap.add_argument("--limit", type=int, help="only N input words from --start (todo: required)")
     ap.add_argument("--chunk", type=int, default=20, help="words per todo chunk")
     a = ap.parse_args()
     if a.cmd == "export":
@@ -149,9 +152,9 @@ def main() -> None:
     elif a.cmd == "todo":
         if not a.limit:
             ap.error("todo needs --limit")
-        cmd_todo(a.lang, a.limit, a.chunk)
+        cmd_todo(a.lang, a.start, a.limit, a.chunk)
     elif a.cmd == "check":
-        cmd_check(a.lang, a.limit)
+        cmd_check(a.lang, a.start, a.limit)
     else:
         cmd_import(a.lang)
 
