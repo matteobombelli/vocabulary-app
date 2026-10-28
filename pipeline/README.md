@@ -204,9 +204,23 @@ $E submit en games                # every teachable word (and: $E submit fr game
 $E collect en games --wait
 ```
 
-Estimates before any games batch was collected (output at the default guess of 350 tokens/word
-for English and 450 for French): games-pilot ≈ $0.02 (en, 159 words) and $0.03 (fr, 232 words);
-games ≈ $3.84 (en, 40,580 words) and $3.50 (fr, 28,536 words).
+The games stages run Haiku at high effort: at low effort a quarter of the words had a "wrong"
+usage that is correct in some sense, and French was worse. High effort measured 3,369 output
+tokens a word (en) and 4,426 (fr), so the full games stage costs about $34 (en) and $32 (fr).
+
+### Games through a cloud session
+
+`cloud_games.py` is the same stage written by Claude Code subagents instead of the Batch API:
+`export` writes `cloud/<lang>-input.jsonl` (teachable words with no games yet, core words first)
+and `cloud/<lang>-prompt.md` (the batch system prompt plus the output format); a cloud session on a
+branch that carries them runs `todo` → one subagent per chunk → `check`, and pushes
+`cloud/out/<lang>/`. Back here, `import` appends every line that passes the batch parser to the
+games stage. `cloud/` is gitignored on main.
+
+```bash
+$E2 export en                     # E2=".venv/bin/python -I cloud_games.py"
+$E2 import en                     # after pulling the branch's cloud/out/
+```
 
 ## 4. Seed
 

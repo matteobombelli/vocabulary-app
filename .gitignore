@@ -10,3 +10,4 @@ playwright-report/
 pipeline/data/
 pipeline/.venv/
 __pycache__/
+pipeline/cloud/
