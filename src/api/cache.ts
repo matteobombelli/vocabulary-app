@@ -46,6 +46,22 @@ export function useCourse(lang: Lang | null) {
   return useCached<Course>(lang && courseKey(lang), () => courses.get(lang!));
 }
 
+// Study answers are saved one after another, across pages: a study page left mid-session keeps
+// saving after it unmounts, and a new session is fetched only once those answers have landed.
+let answers: Promise<unknown> = Promise.resolve();
+
+/** Queues a save behind every earlier one; the returned promise settles with it. */
+export function queueAnswer<T>(send: () => Promise<T>): Promise<T> {
+  const p = answers.then(send);
+  answers = p.catch(() => undefined);
+  return p;
+}
+
+/** Settles once every answer queued so far has been saved or given up on. */
+export function answersSaved(): Promise<unknown> {
+  return answers;
+}
+
 // A session is used once, so it is prefetched rather than cached: the course page starts loading
 // it, and the study page takes it if it is recent enough.
 const SESSION_TTL_MS = 60_000;
@@ -54,7 +70,7 @@ const sessions = new Map<Lang, { at: number; promise: Promise<StudySession> }>()
 export function prefetchSession(lang: Lang): void {
   const p = sessions.get(lang);
   if (p && Date.now() - p.at < SESSION_TTL_MS) return;
-  const promise = study.session(lang);
+  const promise = answersSaved().then(() => study.session(lang));
   promise.catch(() => sessions.delete(lang));
   sessions.set(lang, { at: Date.now(), promise });
 }
@@ -62,7 +78,7 @@ export function prefetchSession(lang: Lang): void {
 export function takeSession(lang: Lang): Promise<StudySession> {
   const p = sessions.get(lang);
   sessions.delete(lang);
-  return p && Date.now() - p.at < SESSION_TTL_MS ? p.promise : study.session(lang);
+  return p && Date.now() - p.at < SESSION_TTL_MS ? p.promise : answersSaved().then(() => study.session(lang));
 }
 
 /** Drops a prefetched session, after answers that would change what it holds. */

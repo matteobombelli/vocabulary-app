@@ -1,5 +1,6 @@
 import {
   StudyAnswer,
+  type GameKind,
   type PairWord,
   type SessionWord,
   type StudyAnswerResponse,
@@ -63,6 +64,49 @@ function toState(row: UserWordRow): WordState {
 
 function requireStarted(course: CourseRow): void {
   if (course.start_rank === null) throw new HttpError(409, "Take the assessment first");
+}
+
+// What each stage takes. Only match boards are judged on the client; everything that can finish
+// a word (the intro and the define stage) is checked here.
+const GAME_ANSWERS: Record<StudyAnswer["kind"], GameKind[]> = {
+  match: ["synonym", "antonym"],
+  choice: ["usage", "cloze", "mc"],
+  typed: ["cloze", "sentence"],
+  dontknow: ["usage", "cloze", "mc", "sentence"],
+};
+
+/** Whether an answer is one the stage could have shown (define multiple choice only while grading is paused). */
+async function fits(body: StudyAnswer, stage: Stage, choiceOnly: () => Promise<boolean>): Promise<boolean> {
+  switch (stage) {
+    case "intro":
+      return body.game === "mc" && (body.kind === "choice" || body.kind === "dontknow");
+    case "games":
+      return GAME_ANSWERS[body.kind].includes(body.game);
+    case "define":
+      if (body.game !== "define") return false;
+      if (body.kind === "typed" || body.kind === "dontknow") return true;
+      return body.kind === "choice" && (await choiceOnly());
+    case "known":
+      return false;
+  }
+}
+
+/** An answer for a state the word has moved past: a retry, a replay, or a define not yet due. */
+function stale(body: StudyAnswer, state: WordState, served: Stage, t: number): boolean {
+  if (body.stage !== served) return true;
+  if (served === "define" && state.stage === "define" && state.dueAt !== null && state.dueAt > t) return true;
+  return served === "games" && body.gamesDone !== undefined && body.gamesDone !== state.gamesDone;
+}
+
+/** The new-word cursor after an adaptive move up, or null when no word of the level's tiers is left above it. */
+async function cursorUp(db: D1Database, course: CourseRow): Promise<number | null> {
+  const cursor = course.cursor_rank + ADAPT_STEP;
+  const tiers = tiersFor(course.level);
+  const next = await db
+    .prepare(`SELECT 1 FROM words WHERE lang = ? AND tier IN (${tiers.map(() => "?").join(", ")}) AND rank > ? LIMIT 1`)
+    .bind(course.lang, ...tiers, cursor)
+    .first();
+  return next ? cursor : null;
 }
 
 function sessionWord(w: WordRow, course: CourseRow, state: WordState, isNew: boolean, t: number): SessionWord {
@@ -180,14 +224,20 @@ export function registerStudyRoutes(r: Router): void {
     const row = await c.env.DB.prepare(`SELECT ${USER_WORD_COLUMNS} FROM user_words uw WHERE uw.user_id = ? AND uw.word_id = ?`)
       .bind(user.id, word.id)
       .first<UserWordRow>();
-    const result = await evaluate(c.env, course, word, body, "learn");
-    const response: StudyAnswerResponse = { result, levelChange: null };
-
     const t = now();
     const state = row ? toState(row) : newWordState(t);
     const served = servedStage(state, t);
-    // An answer for a stage the word is no longer in (a retried request) is logged, nothing more.
-    if (body.stage !== served) return json(response);
+    const graded = body.kind === "typed" && body.game !== "cloze";
+    // A stale answer is logged, nothing more; one that needs the grader is refused, so it costs nothing.
+    if (stale(body, state, served, t)) {
+      if (graded) throw new HttpError(422, "This word has moved on");
+      return json({ result: await evaluate(c.env, course, word, body, "learn"), levelChange: null } satisfies StudyAnswerResponse);
+    }
+    if (!(await fits(body, served, async () => (await gradingStatus(c.env, user.id)).choiceOnly))) {
+      throw new HttpError(400, "That answer does not fit the word's stage");
+    }
+    const result = await evaluate(c.env, course, word, body, "learn");
+    const response: StudyAnswerResponse = { result, levelChange: null };
 
     const correct = result.verdict === "correct";
     const firstSight = row === null;
@@ -219,13 +269,16 @@ export function registerStudyRoutes(r: Router): void {
     if (firstSight) {
       const right = course.adapt_right + (correct ? 1 : 0);
       const total = course.adapt_total + 1;
-      response.levelChange = adaptiveMove(right, total);
-      const cursor =
-        response.levelChange === "up"
-          ? course.cursor_rank + ADAPT_STEP
-          : response.levelChange === "down"
-            ? Math.max(0, course.cursor_rank - ADAPT_STEP)
-            : course.cursor_rank;
+      let move = adaptiveMove(right, total);
+      let cursor = course.cursor_rank;
+      if (move === "down") cursor = Math.max(0, cursor - ADAPT_STEP);
+      if (move === "up") {
+        // No move past the last word the level teaches: new words would stop for good.
+        const up = await cursorUp(c.env.DB, course);
+        if (up === null) move = null;
+        else cursor = up;
+      }
+      response.levelChange = move;
       const reset = total >= ADAPT_WINDOW;
       writes.push(
         c.env.DB.prepare("UPDATE courses SET cursor_rank = ?, adapt_right = ?, adapt_total = ? WHERE user_id = ? AND lang = ?").bind(

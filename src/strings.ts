@@ -23,6 +23,7 @@ export const t = {
   courses: "Courses",
   loading: "Loading",
   somethingWrong: "Something went wrong. Try again.",
+  tryAgain: "Try again",
   back: "Back",
   newVersion: "New version available",
   reload: "Reload",
@@ -93,6 +94,10 @@ export const t = {
   newWord: "New word",
   again: "Again",
   refresh: "Refresh",
+  boardWords: "Words",
+  boardPartners: "Partners",
+  matchRight: (left: string, right: string) => `${left} and ${right}: a match`,
+  matchWrong: (left: string, right: string) => `${left} and ${right}: not a match`,
   labels: {
     usage: "Correct usage",
     cloze: "Fill in the blank",

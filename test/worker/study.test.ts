@@ -193,6 +193,44 @@ describe("lifecycle", () => {
     expect(await userWord(user.id, id)).toMatchObject({ status: "define", completions: 1, fail_count: 1 });
   });
 
+  it("refuses answers the stage could not have shown", async () => {
+    const { cookie, user } = await started();
+    const id = wordId("en", 1);
+    const lemma = lemmaOf(1);
+    const refused = async (body: StudyAnswer) => expect((await jsonRequest("/courses/en/answer", "POST", body, cookie)).status).toBe(400);
+    await refused({ wordId: id, stage: "intro", game: "synonym", kind: "match", correct: true });
+    await answer(cookie, intro(id, true));
+    await answer(cookie, game(id, true));
+    await ago(user.id, id);
+    // A blank answered with the word itself, the definition picked from the session payload, a board.
+    await refused({ wordId: id, stage: "define", game: "cloze", kind: "typed", answer: lemma });
+    await refused({ wordId: id, stage: "define", game: "define", kind: "choice", answer: rightAnswer(lemma) });
+    await refused({ wordId: id, stage: "define", game: "synonym", kind: "match", correct: true });
+    expect(await userWord(user.id, id)).toMatchObject({ status: "define" });
+  });
+
+  it("does not take a define answer before it is due, and does not grade it", async () => {
+    const { cookie, user } = await started();
+    const id = wordId("en", 1);
+    await answer(cookie, intro(id, true));
+    await answer(cookie, game(id, true));
+    const res = await jsonRequest("/courses/en/answer", "POST", define(id, true), cookie);
+    expect(res.status).toBe(422);
+    expect(await userWord(user.id, id)).toMatchObject({ status: "define" });
+    const graded = await env.DB.prepare("SELECT COUNT(*) AS n FROM attempts WHERE user_id = ? AND graded = 1").bind(user.id).first<{ n: number }>();
+    expect(graded!.n).toBe(0);
+  });
+
+  it("counts a replayed game answer once", async () => {
+    const { cookie, user } = await started();
+    const id = wordId("en", 1);
+    await answer(cookie, intro(id, false));
+    await answer(cookie, intro(id, true));
+    await answer(cookie, { ...game(id, true), gamesDone: 0 });
+    await answer(cookie, { ...game(id, true), gamesDone: 0 });
+    expect(await userWord(user.id, id)).toMatchObject({ status: "games", games_done: 1 });
+  });
+
   it("logs an answer for a stage the word has left without moving it", async () => {
     const { cookie, user } = await started();
     const id = wordId("en", 1);
@@ -274,6 +312,23 @@ describe("adaptive", () => {
     const last = await firstSights(cookie, 5);
     expect(last.levelChange).toBe("down");
     expect((await cursor(user.id)).cursor_rank).toBe(500);
+  });
+
+  it("does not move past the last word the level teaches", async () => {
+    const { cookie, user } = await started();
+    await env.DB.prepare("UPDATE courses SET cursor_rank = 5000 WHERE user_id = ?").bind(user.id).run();
+    const last = await firstSights(cookie, ADAPT_WINDOW);
+    expect(last.levelChange).toBeNull();
+    expect(await cursor(user.id)).toEqual({ cursor_rank: 5000, adapt_total: 0 });
+  });
+
+  it("starts over from the starting point when the level changes", async () => {
+    const { cookie, user } = await started();
+    await env.DB.prepare("UPDATE courses SET cursor_rank = 3000, adapt_total = 7 WHERE user_id = ?").bind(user.id).run();
+    await jsonRequest("/courses/en/level", "PUT", { level: "fluent" }, cookie);
+    expect(await cursor(user.id)).toEqual({ cursor_rank: 3000, adapt_total: 7 });
+    await jsonRequest("/courses/en/level", "PUT", { level: "beginner" }, cookie);
+    expect(await cursor(user.id)).toEqual({ cursor_rank: 0, adapt_total: 0 });
   });
 
   it("leaves placement alone in between", async () => {

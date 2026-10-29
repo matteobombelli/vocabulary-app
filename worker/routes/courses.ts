@@ -42,7 +42,16 @@ export function registerCourseRoutes(r: Router): void {
     const lang = parseLang(c.params.lang);
     const { level } = await parseJson(c.req, LevelBody);
     await getCourse(c.env.DB, user.id, lang);
-    await c.env.DB.prepare("UPDATE courses SET level = ? WHERE user_id = ? AND lang = ?").bind(level, user.id, lang).run();
+    // A new level teaches other tiers, whose words the cursor may have passed: start over from
+    // where learning started (words already seen are skipped anyway).
+    await c.env.DB.prepare(
+      `UPDATE courses SET level = ?1,
+         cursor_rank = CASE WHEN start_rank IS NULL THEN cursor_rank ELSE MAX(start_rank - 1, 0) END,
+         adapt_right = 0, adapt_total = 0
+       WHERE user_id = ?2 AND lang = ?3 AND (level IS NULL OR level != ?1)`,
+    )
+      .bind(level, user.id, lang)
+      .run();
     return json({ course: await toCourse(c.env.DB, await getCourse(c.env.DB, user.id, lang)) });
   });
 

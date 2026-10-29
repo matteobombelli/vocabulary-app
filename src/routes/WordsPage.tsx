@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router";
 import type { WordListItem, WordListTab } from "../../shared/api";
 import { study } from "../api/endpoints";
@@ -25,15 +25,19 @@ export default function WordsPage() {
   const [words, setWords] = useState<WordListItem[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(false);
+  // Only the latest request may fill the list: switching tabs fast must not show one tab's words under another.
+  const latest = useRef(0);
 
   const load = useCallback(
     async (offset: number) => {
+      const id = ++latest.current;
       try {
         const page = await study.words(lang!, tab, offset);
+        if (id !== latest.current) return;
         setWords((prev) => (offset === 0 ? page.words : [...(prev ?? []), ...page.words]));
         setHasMore(page.hasMore);
       } catch {
-        setError(true);
+        if (id === latest.current) setError(true);
       }
     },
     [lang, tab]

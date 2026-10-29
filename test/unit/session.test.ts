@@ -126,6 +126,17 @@ describe("session engine", () => {
     expect([...item.rights].sort()).toEqual(item.pairs.map((p) => p.right).sort());
   });
 
+  it("leaves out a known word whose synonyms include another pair's partner", () => {
+    const games = { ...fixtureGames("w1", 1), usage: null, cloze: null, antonyms: [], synonyms: ["shared"] };
+    const w = word(1, { stage: "games", isNew: false, games });
+    const clash: PairWord = { wordId: 200, lemma: "clash", synonyms: ["shared", "clashsyn"], antonyms: [] };
+    for (let seed = 1; seed <= 20; seed++) {
+      const item = nextItem(createEngine([w], [clash, ...known], "beginner", false), rng(seed));
+      if (item?.kind !== "match") throw new Error("expected a board");
+      expect(item.pairs.map((p) => p.left)).not.toContain("clash");
+    }
+  });
+
   it("falls back to the definition multiple choice for a word without game content", () => {
     const empty = { synonyms: [], antonyms: [], cloze: null, usage: null };
     const w = word(1, { stage: "games", isNew: false, games: empty });

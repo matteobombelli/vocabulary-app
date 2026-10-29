@@ -1,5 +1,5 @@
 import { BookOpen, ChevronRight, Gauge, List, type LucideIcon } from "lucide-react";
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import type { Level } from "../../shared/api";
 import { courseKey, prefetchSession, setCached, useCourse } from "../api/cache";
@@ -15,6 +15,7 @@ export default function CoursePage() {
   const navigate = useNavigate();
   const { data: course, error } = useCourse(lang);
   const started = course?.startRank != null;
+  const [levelError, setLevelError] = useState(false);
 
   useEffect(() => {
     if (lang) rememberCourse(lang);
@@ -33,7 +34,12 @@ export default function CoursePage() {
   }
 
   async function chooseLevel(level: Level) {
-    setCached(courseKey(lang!), await courses.level(lang!, level));
+    setLevelError(false);
+    try {
+      setCached(courseKey(lang!), await courses.level(lang!, level));
+    } catch {
+      setLevelError(true);
+    }
   }
 
   return (
@@ -52,6 +58,7 @@ export default function CoursePage() {
         <section className="question__actions">
           <h2 className="group-label">{t.levelQuestion(LANGUAGE_NAMES[lang])}</h2>
           <LevelPicker value={null} onChange={(l) => void chooseLevel(l)} />
+          {levelError && <p className="error">{t.somethingWrong}</p>}
           <p className="group-hint">{t.levelHint}</p>
         </section>
       ) : (

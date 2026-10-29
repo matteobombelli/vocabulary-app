@@ -7,7 +7,9 @@ import {
   clozeMatches,
   createEngine,
   firstSight,
+  gamesDone,
   nextItem,
+  park,
   progress,
   sessionWord,
   type Engine,
@@ -15,7 +17,7 @@ import {
   type Result,
 } from "../../shared/session";
 import { ApiError } from "../api/client";
-import { courseKey, dropSession, prefetchSession, setCached, takeSession } from "../api/cache";
+import { answersSaved, courseKey, dropSession, prefetchSession, queueAnswer, setCached, takeSession } from "../api/cache";
 import { courses, study } from "../api/endpoints";
 import { ChoiceOnlyBanner } from "../components/ChoiceOnlyBanner";
 import { ChoiceGame } from "../components/games/ChoiceGame";
@@ -29,13 +31,12 @@ import { useLang } from "../useLang";
 const RETRIES = 2;
 
 /**
- * Posts answers one after another (a word's answers must land in order), retrying network
- * failures. Answers checked on the client are fire-and-forget; typed ones await the grader.
+ * Posts answers through the app-wide queue (a word's answers must land in order), retrying network
+ * failures. Answers checked on the client are fire-and-forget; graded ones await the grader.
  */
-function useAnswerQueue(lang: Lang | null, onResponse: (r: StudyAnswerResponse) => void, onFailure: () => void) {
-  const chain = useRef<Promise<unknown>>(Promise.resolve());
+function useAnswerQueue(lang: Lang | null, onResponse: (r: StudyAnswerResponse) => void, onFailure: (body: StudyAnswer) => void) {
   const push = useCallback(
-    (body: StudyAnswer): Promise<StudyAnswerResponse> => {
+    (body: StudyAnswer, background: boolean): Promise<StudyAnswerResponse> => {
       const send = async (attempt: number): Promise<StudyAnswerResponse> => {
         try {
           const r = await study.answer(lang!, body);
@@ -46,18 +47,15 @@ function useAnswerQueue(lang: Lang | null, onResponse: (r: StudyAnswerResponse) 
             await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
             return send(attempt + 1);
           }
-          if (body.kind !== "typed") onFailure();
+          if (background) onFailure(body);
           throw err;
         }
       };
-      const p = chain.current.then(() => send(0));
-      chain.current = p.catch(() => undefined);
-      return p;
+      return queueAnswer(() => send(0));
     },
     [lang, onResponse, onFailure],
   );
-  const flush = useCallback(() => chain.current, []);
-  return useMemo(() => ({ push, flush }), [push, flush]);
+  return useMemo(() => ({ push, flush: answersSaved }), [push]);
 }
 
 interface Answered {
@@ -104,7 +102,12 @@ export default function StudyPage() {
     const change: LevelChange = r.levelChange;
     if (change) setToast(change === "up" ? t.levelUp : t.levelDown);
   }, []);
-  const onFailure = useCallback(() => setToast(t.saveFailed), []);
+  // An answer that could not be saved leaves the server a step behind: the word's later answers
+  // would be dropped as stale, so it waits for the next session.
+  const onFailure = useCallback((body: StudyAnswer) => {
+    setToast(t.saveFailed);
+    setEngine((e) => e && park(e, body.wordId));
+  }, []);
   const queue = useAnswerQueue(lang, onResponse, onFailure);
 
   useEffect(() => {
@@ -163,7 +166,7 @@ export default function StudyPage() {
   /** Records answers checked on the client and shows how it went. */
   function finish(results: Result[], bodies: StudyAnswer[], shown: Omit<Answered, "verdict" | "auto" | "words"> & { words?: SessionWord[] }) {
     if (!engine || !item) return;
-    for (const b of bodies) queue.push(b).catch(() => undefined);
+    for (const b of bodies) queue.push(b.stage === "games" ? { ...b, gamesDone: gamesDone(engine, b.wordId) } : b, true).catch(() => undefined);
     const allRight = results.every((r) => r.correct);
     const missed = results.filter((r) => !r.correct).map((r) => sessionWord(engine, r.wordId));
     setEngine(applyResults(engine, item, results));
@@ -182,13 +185,17 @@ export default function StudyPage() {
     setChecking(true);
     setError(null);
     try {
-      const { result } = await queue.push({
-        wordId: word.wordId,
-        stage,
-        game,
-        kind: text === null ? "dontknow" : "typed",
-        answer: text ?? undefined,
-      });
+      const { result } = await queue.push(
+        {
+          wordId: word.wordId,
+          stage,
+          game,
+          kind: text === null ? "dontknow" : "typed",
+          answer: text ?? undefined,
+          gamesDone: stage === "games" ? gamesDone(engine, word.wordId) : undefined,
+        },
+        false,
+      );
       const correct = result.verdict === "correct";
       setEngine(applyResults(engine, item, [{ wordId: word.wordId, correct }]));
       setAnswered({ verdict: result.verdict, result, words: [word], teach: !correct || item.kind === "define", auto: false });
@@ -196,6 +203,11 @@ export default function StudyPage() {
       if (err instanceof ApiError && err.status === 409) {
         // Grading paused mid-session: carry on with multiple choice.
         const e = { ...engine, choiceOnly: true };
+        setEngine(e);
+        show(e);
+      } else if (err instanceof ApiError && err.status === 422) {
+        // The word already moved on (answered in another tab): skip it this session.
+        const e = park(engine, word.wordId);
         setEngine(e);
         show(e);
       }
@@ -282,7 +294,13 @@ export default function StudyPage() {
       {error && <p className="error">{error}</p>}
 
       {!engine ? (
-        !error && <SkeletonCard />
+        error ? (
+          <button type="button" className="button--plain" onClick={() => void load()}>
+            {t.tryAgain}
+          </button>
+        ) : (
+          <SkeletonCard />
+        )
       ) : !item ? (
         <Summary engine={engine} lang={lang} onMore={() => void load()} />
       ) : (

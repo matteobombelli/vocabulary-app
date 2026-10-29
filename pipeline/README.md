@@ -208,6 +208,12 @@ The games stages run Haiku at high effort: at low effort a quarter of the words 
 usage that is correct in some sense, and French was worse. High effort measured 3,369 output
 tokens a word (en) and 4,426 (fr), so the full games stage costs about $34 (en) and $32 (fr).
 
+How the shipped content was made (October 2026): 17,488 EN and 14,083 FR words through
+cloud-session subagents (below), then the remaining 22,937 EN and 14,025 FR words through the
+`games` batch for $33.91 (3,331 and 4,135 output tokens a word), then a retry batch for the ~820
+words that failed checks. Subagents cost about $0.011 a word against the batch's ~$0.001, mostly
+fixed per-subagent overhead, so the batch is the default for any rerun.
+
 ### Games through a cloud session
 
 `cloud_games.py` is the same stage written by Claude Code subagents instead of the Batch API:
@@ -215,7 +221,9 @@ tokens a word (en) and 4,426 (fr), so the full games stage costs about $34 (en) 
 and `cloud/<lang>-prompt.md` (the batch system prompt plus the output format); a cloud session on a
 branch that carries them runs `todo` → one subagent per chunk → `check`, and pushes
 `cloud/out/<lang>/`. Back here, `import` appends every line that passes the batch parser to the
-games stage. `cloud/` is gitignored on main.
+games stage. `cloud/` is gitignored on main. Several sessions can split the input with
+`todo --start N --limit M`: chunk and output files carry the range start, so they never collide.
+A cloud session can only push to a repository the Claude GitHub App has access to.
 
 ```bash
 $E2 export en                     # E2=".venv/bin/python -I cloud_games.py"

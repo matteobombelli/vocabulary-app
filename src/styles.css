@@ -1172,7 +1172,7 @@ textarea:focus-visible {
   animation: pop var(--medium) var(--ease-spring);
 }
 
-button.tile--matched:disabled {
+button.tile--matched[aria-disabled="true"] {
   opacity: 0.55;
 }
 

@@ -53,15 +53,6 @@ describe("budget guard", () => {
     expect(session.status.choiceOnly).toBe(true);
     const cards = session.words;
 
-    const typed = await jsonRequest(
-      "/courses/en/answer",
-      "POST",
-      { wordId: cards[0].wordId, stage: "intro", game: "sentence", kind: "typed", answer: "x" },
-      cookie,
-    );
-    expect(typed.status).toBe(409);
-    expect(await typed.json()).toEqual({ error: "Typed answers are paused", details: { reason: "budget" } });
-
     const choice = await jsonRequest(
       "/courses/en/answer",
       "POST",
@@ -70,6 +61,15 @@ describe("budget guard", () => {
     );
     expect(choice.status).toBe(200);
     expect(((await choice.json()) as { result: { verdict: string } }).result.verdict).toBe("correct");
+
+    const typed = await jsonRequest(
+      "/courses/en/answer",
+      "POST",
+      { wordId: cards[0].wordId, stage: "games", game: "sentence", kind: "typed", answer: "x", gamesDone: 0 },
+      cookie,
+    );
+    expect(typed.status).toBe(409);
+    expect(await typed.json()).toEqual({ error: "Typed answers are paused", details: { reason: "budget" } });
     await setMonthlyCost(0);
   });
 
@@ -91,12 +91,15 @@ describe("budget guard", () => {
     const before = await env.DB.prepare("SELECT calls FROM api_usage WHERE month = ?").bind(monthKey(Date.now())).first<{ calls: number }>();
     const res = await request("/courses/en/session", { headers: cookieHeader(cookie) });
     const { session } = (await res.json()) as { session: StudySession };
-    await jsonRequest(
+    const w = session.words[0];
+    await jsonRequest("/courses/en/answer", "POST", { wordId: w.wordId, stage: "intro", game: "mc", kind: "choice", answer: rightAnswer(w.lemma) }, cookie);
+    const graded = await jsonRequest(
       "/courses/en/answer",
       "POST",
-      { wordId: session.words[0].wordId, stage: "define", game: "define", kind: "typed", answer: "anything" },
+      { wordId: w.wordId, stage: "games", game: "sentence", kind: "typed", answer: `I saw the ${w.lemma} near the gate today.` },
       cookie,
     );
+    expect(graded.status).toBe(200);
     const after = await env.DB.prepare("SELECT calls FROM api_usage WHERE month = ?").bind(monthKey(Date.now())).first<{ calls: number }>();
     expect(after!.calls).toBe((before?.calls ?? 0) + 1);
   });

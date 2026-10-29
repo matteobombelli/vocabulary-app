@@ -160,11 +160,17 @@ function board(e: Engine, w: Tracked, game: MatchGame, random: () => number): It
   ].slice(0, MAX_BOARD_TARGETS);
   const pairs: Pair[] = [];
   const used = new Set<string>();
+  // Each left word's full list: a right word that also fits another left word would make a
+  // correct-looking match count as a miss.
+  const lists: Set<string>[] = [];
   const add = (left: string, options: string[], wordId: number | null) => {
-    const fresh = options.filter((r) => !used.has(fold(r)) && fold(r) !== fold(left));
-    if (fresh.length === 0 || used.has(fold(left))) return;
+    const own = new Set(options.map(fold));
+    if (used.has(fold(left)) || pairs.some((p) => own.has(fold(p.right)))) return;
+    const fresh = options.filter((r) => !used.has(fold(r)) && fold(r) !== fold(left) && !lists.some((l) => l.has(fold(r))));
+    if (fresh.length === 0) return;
     const right = fresh[Math.floor(random() * fresh.length)];
     used.add(fold(left)).add(fold(right));
+    lists.push(own);
     pairs.push({ left, right, wordId });
   };
   for (const t of targets) add(t.word.lemma, t.word.games[key], t.word.wordId);
@@ -304,4 +310,14 @@ export function firstSight(e: Engine, wordId: number): boolean {
 
 export function sessionWord(e: Engine, wordId: number): SessionWord {
   return e.words.find((w) => w.word.wordId === wordId)!.word;
+}
+
+/** The games a word has won so far, sent with its games answers so the server can spot replays. */
+export function gamesDone(e: Engine, wordId: number): number {
+  return e.words.find((w) => w.word.wordId === wordId)?.gamesDone ?? 0;
+}
+
+/** The engine with a word set aside for this session (an answer for it could not be saved). */
+export function park(e: Engine, wordId: number): Engine {
+  return { ...e, words: e.words.map((w) => (w.word.wordId === wordId ? { ...w, done: true } : w)) };
 }

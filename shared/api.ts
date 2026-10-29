@@ -56,6 +56,9 @@ export const StudyAnswer = Answer.extend({
   game: GameKind,
   // For "match" answers only.
   correct: z.boolean().optional(),
+  // Games stage: the games won before this answer, as the client saw them. An answer whose count
+  // the server has moved past (a retry, a replay) is stale.
+  gamesDone: z.number().int().min(0).optional(),
 });
 export type StudyAnswer = z.input<typeof StudyAnswer>;
 

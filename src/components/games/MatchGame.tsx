@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Pair } from "../../../shared/session";
+import { t } from "../../strings";
 
 const WRONG_MS = 450;
 
@@ -16,6 +17,8 @@ export function MatchGame({ pairs, rights, onDone }: Props) {
   const [right, setRight] = useState<string | null>(null);
   const [matched, setMatched] = useState<Set<string>>(new Set());
   const [wrong, setWrong] = useState<{ left: string; right: string } | null>(null);
+  // Read out by screen readers after each attempt.
+  const [said, setSaid] = useState("");
   const missed = useRef(new Set<number>());
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -35,9 +38,11 @@ export function MatchGame({ pairs, rights, onDone }: Props) {
     if (pair.right === r) {
       const next = new Set(matched).add(l);
       setMatched(next);
+      setSaid(t.matchRight(l, r));
       if (next.size === pairs.length) onDone(missed.current);
       return;
     }
+    setSaid(t.matchWrong(l, r));
     // A wrong match counts against both session words it involved.
     const other = pairs.find((p) => p.right === r)!;
     for (const id of [pair.wordId, other.wordId]) if (id !== null) missed.current.add(id);
@@ -56,9 +61,10 @@ export function MatchGame({ pairs, rights, onDone }: Props) {
         key={text}
         type="button"
         className={`tile${state}`}
-        disabled={done}
+        // aria-disabled, not disabled: a matched tile keeps focus, so keyboard users are not sent back to the top.
+        aria-disabled={done}
         aria-pressed={selected}
-        onClick={() => choose(side, text)}
+        onClick={() => !done && choose(side, text)}
       >
         {text}
       </button>
@@ -67,8 +73,15 @@ export function MatchGame({ pairs, rights, onDone }: Props) {
 
   return (
     <div className="board">
-      <div className="board__col">{pairs.map((p) => tile("left", p.left, matched.has(p.left)))}</div>
-      <div className="board__col">{rights.map((r) => tile("right", r, rightMatched(r)))}</div>
+      <div className="board__col" role="group" aria-label={t.boardWords}>
+        {pairs.map((p) => tile("left", p.left, matched.has(p.left)))}
+      </div>
+      <div className="board__col" role="group" aria-label={t.boardPartners}>
+        {rights.map((r) => tile("right", r, rightMatched(r)))}
+      </div>
+      <p className="sr-only" role="status">
+        {said}
+      </p>
     </div>
   );
 }
