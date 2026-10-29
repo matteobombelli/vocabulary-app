@@ -188,7 +188,7 @@ def build_chunks(lang: str, stage: str) -> list[tuple[str, list[int], dict]]:
         sys.exit("repair runs on the English course only")
     words = read_lemmas(lang)
     by_rank = {w["rank"]: w for w in words}
-    done = batch.load_results(lang, stage)
+    done = games(lang) if stage == "games" else batch.load_results(lang, stage)  # games: pilot words count too
     batches = batch.load_batches(lang, stage)
     in_flight = {r for b in batches if not b["collected"] for rs in b["requests"].values() for r in rs}
     tried = {r for b in batches if b["collected"] for rs in b["requests"].values() for r in rs}
